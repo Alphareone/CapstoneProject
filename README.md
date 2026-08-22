@@ -1,4 +1,4 @@
-# CapstoneProject
+# CapstoneProject 
 -----------------------------------------------------------------------
 # Propuestas de clientes:
 - Lopa Juguetes (fabrica artesanal)
@@ -6,7 +6,7 @@
 - Hospital Carlos Van Buren (Red Salud Db)
 - Municipalidad Peñalolen
 -----------------------------------------------------------------------
-# Integrantes:
+# Integrantes Grupo 2:
 
  - Felipe Calderon Oliva: Fel.calderono@duocuc.cl
  - Alfredo Benjamín Castro Alarcón: alf.castro@duocuc.cl
