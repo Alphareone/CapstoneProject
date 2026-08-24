@@ -1,6 +1,6 @@
 # ClearBid NJ — Sistema de Inteligencia Pre-Puja para Remates Inmobiliarios
 
-🌐 **Idioma / Language:** [Español](README_ES.md) | [English](README.md)
+🌐 **Idioma / Language:** [Español](README_ESP.md) | [English](README_ENG.md)
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)
