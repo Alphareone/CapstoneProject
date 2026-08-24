@@ -47,6 +47,7 @@ Cristopher Leonardo Hernández Calderón — Frontend Lead (cr.hernandezc@duocuc
 Felipe Calderón Oliva — Database & Data Engine Lead (Fel.calderono@duocuc.cl)
 
 Matías Enrique Tirado Jeldes — DevOps, QA & Async Services (Ma.tirado@duocuc.cl)
+
 ---
 
 ## 🏫 Academic & Client Context
@@ -57,6 +58,7 @@ Institution: Duoc UC — Escuela de Informática y Telecomunicaciones (Sede Viñ
 Course: Capstone Project (Ingeniería Informática - Plan 1446114)
 
 Semester: 2026-1
+
 ---
 
 ## 📁 Repository Structure
