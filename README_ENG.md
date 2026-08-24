@@ -1,6 +1,6 @@
 # ClearBid NJ — Pre-Bid Real Estate Intelligence System
 
-🌐 **Language / Idioma:** [English](README.md) | [Español](README_ES.md)
+🌐 **Language / Idioma:** [English](README_ENG.md) | [Español](README_ESP.md)
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)
