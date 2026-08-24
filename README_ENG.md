@@ -39,14 +39,15 @@ Real estate investors participating in New Jersey (USA) property auctions (Sheri
 
 ---
 
+
 ## 👥 Development Team (Team 2 — SCRUM Roles)
-Alfredo Benjamín Castro Alarcón — Backend Lead & Security (alf.castro@duocuc.cl)
 
-Cristopher Leonardo Hernández Calderón — Frontend Lead (cr.hernandezc@duocuc.cl)
-
-Felipe Calderón Oliva — Database & Data Engine Lead (Fel.calderono@duocuc.cl)
-
-Matías Enrique Tirado Jeldes — DevOps, QA & Async Services (Ma.tirado@duocuc.cl)
+| Name | SCRUM Role | Primary Responsibilities | Contact |
+| :--- | :--- | :--- | :--- |
+| **Alfredo Benjamín Castro Alarcón** | Backend Lead & Security | REST API (FastAPI), OAuth/JWT authentication, 2FA security | `alf.castro@duocuc.cl` |
+| **Cristopher Leonardo Hernández Calderón** | Frontend Lead | Web UI (React 18 + TS), GIS maps, i18n, Zustand state | `cr.hernandezc@duocuc.cl` |
+| **Felipe Calderón Oliva** | Database & Data Engine Lead | PostgreSQL/PostGIS, SQLAlchemy async models, Risk Rules Engine | `Fel.calderono@duocuc.cl` |
+| **Matías Enrique Tirado Jeldes** | DevOps, QA & Async Services | Docker orchestration, background workers, Pytest suite | `Ma.tirado@duocuc.cl` |
 
 ---
 
