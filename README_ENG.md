@@ -58,7 +58,7 @@ Institution: Duoc UC — Escuela de Informática y Telecomunicaciones (Sede Viñ
 
 Course: Capstone Project (Ingeniería Informática - Plan 1446114)
 
-Semester: 2026-1
+Semester: 2026-2
 
 ---
 
