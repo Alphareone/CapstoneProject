@@ -39,6 +39,26 @@ Real estate investors participating in New Jersey (USA) property auctions (Sheri
 
 ---
 
+## 👥 Development Team (Team 2 — SCRUM Roles)
+Alfredo Benjamín Castro Alarcón — Backend Lead & Security (alf.castro@duocuc.cl)
+
+Cristopher Leonardo Hernández Calderón — Frontend Lead (cr.hernandezc@duocuc.cl)
+
+Felipe Calderón Oliva — Database & Data Engine Lead (Fel.calderono@duocuc.cl)
+
+Matías Enrique Tirado Jeldes — DevOps, QA & Async Services (Ma.tirado@duocuc.cl)
+---
+
+## 🏫 Academic & Client Context
+Client: ClearBid NJ, LLC
+
+Institution: Duoc UC — Escuela de Informática y Telecomunicaciones (Sede Viña del Mar)
+
+Course: Capstone Project (Ingeniería Informática - Plan 1446114)
+
+Semester: 2026-1
+---
+
 ## 📁 Repository Structure
 
 ```text
