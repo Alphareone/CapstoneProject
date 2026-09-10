@@ -1,4 +1,4 @@
-# ClearBid NJ — Pre-Bid Real Estate Intelligence System
+# ClearBid NJ — SIPPRI(System for Intelligence on Pre-Bid Properties & Real estate Insights)
 
 🌐 **Language / Idioma:** [English](README.md) | [Español](README_ESP.md)
 
