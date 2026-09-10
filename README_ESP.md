@@ -1,4 +1,4 @@
-# ClearBid NJ — Sistema de Inteligencia Pre-Puja para Remates Inmobiliarios (SIPPRI)
+# ClearBid NJ — SIPPRI(Sistema de Inteligencia Pre-Puja para Remates Inmobiliarios)
 
 
 🌐 **Idioma / Language:** [Español](README_ESP.md) | [English](README.md)
