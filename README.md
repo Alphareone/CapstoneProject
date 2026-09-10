@@ -52,7 +52,7 @@ Real estate investors participating in New Jersey (USA) property auctions (Sheri
 ---
 
 ## 🏫 Academic & Client Context
-Client: ClearBid NJ, LLC
+Client: ClearBid NJ, LLC  in collaboration with alloxentric
 
 Institution: Duoc UC — Escuela de Informática y Telecomunicaciones (Sede Viña del Mar)
 
