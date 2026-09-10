@@ -52,7 +52,7 @@ Los inversionistas inmobiliarios que participan en subastas del Estado de New Je
 ---
 
 ## 🏫 Academic & Client Context
-Client: ClearBid NJ, LLC
+Client: ClearBid NJ, LLC en colaboración con Alloxentric
 
 Institution: Duoc UC — Escuela de Informática y Telecomunicaciones (Sede Viña del Mar)
 
