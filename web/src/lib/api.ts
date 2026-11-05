@@ -8,7 +8,8 @@ import axios, {
 import type { ApiError } from "@/types/api";
 import { tokenStore } from "./tokens";
 
-const baseURL = import.meta.env.VITE_API_URL || "";
+// Fallback explícito a la URL de Render si no detecta la variable de entorno
+const baseURL = import.meta.env.VITE_API_URL || "https://clearbid-backend-1s56.onrender.com";
 
 export const api = axios.create({
   baseURL,
