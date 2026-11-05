@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,13 +35,11 @@ def mask_phone(phone: str | None) -> str | None:
 
 def send_email_otp(to_email: str, code: str) -> None:
     """Envía el código de verificación por correo electrónico usando SMTP."""
-    # Lee desde settings o directamente de las variables de entorno
     smtp_user = getattr(settings, "SMTP_USER", None) or os.getenv("SMTP_USER")
     smtp_host = getattr(settings, "SMTP_HOST", None) or os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = getattr(settings, "SMTP_PORT", None) or os.getenv("SMTP_PORT", 587)
+    smtp_port = int(getattr(settings, "SMTP_PORT", None) or os.getenv("SMTP_PORT", 465))
     smtp_pass = getattr(settings, "SMTP_PASSWORD", None) or os.getenv("SMTP_PASSWORD")
 
-    # Si no hay credenciales cargadas, informa el problema en la terminal
     if not smtp_user or not smtp_pass:
         print(f"[EMAIL-STUB] (Falta SMTP_USER o SMTP_PASSWORD en .env) Para {to_email}: Tu código ClearBid NJ es {code}")
         return
@@ -62,11 +61,17 @@ Si no solicitaste este código, puedes ignorar este mensaje.
 """
         msg.attach(MIMEText(body, "plain"))
 
-        server = smtplib.SMTP(smtp_host, int(smtp_port))
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, to_email, msg.as_string())
-        server.quit()
+        # Selecciona el método según el puerto: SSL para 465, TLS/STARTTLS para 587
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, to_email, msg.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, to_email, msg.as_string())
+
         print(f"[EMAIL-SUCCESS] Código enviado correctamente a {to_email}")
     except Exception as e:
         print(f"[EMAIL-ERROR] Fallo al enviar correo a {to_email}: {e}")
@@ -74,7 +79,11 @@ Si no solicitaste este código, puedes ignorar este mensaje.
 
 
 async def create_otp_challenge(
-    db: AsyncSession, user, purpose: str = "login", pending_phone: str | None = None
+    db: AsyncSession,
+    user,
+    purpose: str = "login",
+    pending_phone: str | None = None,
+    background_tasks: BackgroundTasks | None = None
 ) -> tuple[OtpChallenge, str]:
     """Crea un reto OTP, lo persiste y envía el código por correo electrónico."""
     code = "".join(secrets.choice("0123456789") for _ in range(settings.OTP_LENGTH))
@@ -91,12 +100,20 @@ async def create_otp_challenge(
 
     target_email = getattr(user, "email", None)
     if target_email:
-        send_email_otp(target_email, code)
+        if background_tasks:
+            background_tasks.add_task(send_email_otp, target_email, code)
+        else:
+            send_email_otp(target_email, code)
 
     return challenge, code
 
 
-async def resend_otp(db: AsyncSession, challenge: OtpChallenge, user) -> None:
+async def resend_otp(
+    db: AsyncSession,
+    challenge: OtpChallenge,
+    user,
+    background_tasks: BackgroundTasks | None = None
+) -> None:
     """Regenera el código de un reto existente y lo reenvía por correo."""
     code = "".join(secrets.choice("0123456789") for _ in range(settings.OTP_LENGTH))
     challenge.code_hash = _sha256(code)
@@ -107,7 +124,10 @@ async def resend_otp(db: AsyncSession, challenge: OtpChallenge, user) -> None:
     
     target_email = getattr(user, "email", None)
     if target_email:
-        send_email_otp(target_email, code)
+        if background_tasks:
+            background_tasks.add_task(send_email_otp, target_email, code)
+        else:
+            send_email_otp(target_email, code)
 
 
 def verify_otp_code(challenge: OtpChallenge, code: str) -> str:

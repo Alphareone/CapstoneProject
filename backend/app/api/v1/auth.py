@@ -1,7 +1,7 @@
 """Módulo 5.1 — Autenticación y 2FA."""
 import uuid
 import jwt
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,7 +61,11 @@ def _rate_limit(request: Request, bucket: str) -> None:
     summary="Registro de usuario",
     description="Crea un usuario nuevo en PostgreSQL y genera el reto 2FA.",
 )
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(
+    body: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     exists = await db.execute(
         select(User).where((User.email == body.email) | (User.phone == body.phone))
     )
@@ -75,23 +79,24 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         phone=body.phone,
         password_hash=hash_password(body.password),
         role="investor",
-        is_active=True,  # Marca como activo para que pueda operar directamente
+        is_active=True,
     )
     db.add(user)
     await db.flush()
     db.add(UserPreference(user_id=user.id))
     db.add(AlertSetting(user_id=user.id))
 
-    challenge, _ = await auth_service.create_otp_challenge(db, user, purpose="register")
+    challenge, _ = await auth_service.create_otp_challenge(
+        db, user, purpose="register", background_tasks=background_tasks
+    )
     
-    # GUARDA REALMENTE EN POSTGRESQL
     await db.commit()
 
     return RegisterResponse(
         user_id=user.id,
         challenge_id=challenge.id,
-        method="email",  # Cambiado de "sms" a "email"
-        masked_phone=user.email,  # Muestra el e-mail en el frontend
+        method="email",
+        masked_phone=user.email,
     )
 
 
@@ -102,7 +107,12 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     description="Verifica email y contraseña. Si es correcto, inicia el reto 2FA por correo.",
     responses={401: {"description": "Credenciales inválidas"}, 429: {}},
 )
-async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+async def login(
+    body: LoginRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     _rate_limit(request, "login")
     user = (
         await db.execute(select(User).where(User.email == body.email))
@@ -115,10 +125,12 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
     ):
         raise errors.unauthorized("Credenciales inválidas.")
 
-    challenge, _ = await auth_service.create_otp_challenge(db, user, purpose="login")
+    challenge, _ = await auth_service.create_otp_challenge(
+        db, user, purpose="login", background_tasks=background_tasks
+    )
     return ChallengeResponse(
         challenge_id=challenge.id,
-        masked_phone=user.email  # Muestra el e-mail del usuario
+        masked_phone=user.email
     )
 
 
@@ -131,7 +143,10 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
     responses={401: {"description": "Token de proveedor inválido"}, 422: {}},
 )
 async def oauth_login(
-    provider: str, body: OAuthRequest, db: AsyncSession = Depends(get_db)
+    provider: str,
+    body: OAuthRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
     if provider not in {"google", "apple", "facebook"}:
         raise errors.unprocessable("Proveedor no soportado.")
@@ -178,7 +193,9 @@ async def oauth_login(
             )
         )
 
-    challenge, _ = await auth_service.create_otp_challenge(db, user, purpose="login")
+    challenge, _ = await auth_service.create_otp_challenge(
+        db, user, purpose="login", background_tasks=background_tasks
+    )
     return OAuthResponse(
         status="2fa_required",
         challenge_id=challenge.id,
@@ -194,14 +211,17 @@ async def oauth_login(
     responses={404: {"description": "Reto inexistente"}, 429: {}},
 )
 async def resend_2fa(
-    body: Send2FARequest, request: Request, db: AsyncSession = Depends(get_db)
+    body: Send2FARequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
     _rate_limit(request, "2fa_send")
     challenge = await db.get(OtpChallenge, body.challenge_id)
     if challenge is None or challenge.consumed:
         raise errors.not_found("Reto 2FA inexistente.")
     user = await db.get(User, challenge.user_id)
-    await auth_service.resend_otp(db, challenge, user)
+    await auth_service.resend_otp(db, challenge, user, background_tasks=background_tasks)
     from app.core.config import settings
     return Send2FAResponse(sent=True, expires_in=settings.OTP_EXPIRE_SECONDS)
 
@@ -216,37 +236,29 @@ async def verify_2fa(
 ):
     _rate_limit(request, "2fa_verify")
 
-    # 1. Obtener el reto desde la BD con el ID enviado por el frontend
     challenge = await db.get(OtpChallenge, body.challenge_id)
     if challenge is None:
         raise errors.not_found("Reto de verificación no encontrado.")
 
-    # 2. VALIDAR EL CÓDIGO INGRESADO CONTRA EL HASH EN BD
     status_otp = auth_service.verify_otp_code(challenge, body.code)
     
     if status_otp == "expired":
         raise errors.bad_request("El código de verificación ha expirado o superó los intentos permitidos.")
     elif status_otp == "invalid":
-        # Guarda el número de intentos fallidos en la BD
         await db.commit()
         raise errors.bad_request("Código de verificación incorrecto.")
 
-    # 3. Marcar el reto como consumido para evitar reutilización
     challenge.consumed = True
 
-    # 4. Obtener al usuario que realmente creó ese reto
     user = await db.get(User, challenge.user_id)
     if user is None:
         raise errors.not_found("Usuario no encontrado.")
 
-    # 5. Activar usuario si estaba inactivo
     if not user.is_active:
         user.is_active = True
 
-    # 6. Guardar cambios (reto consumido y estado de usuario)
     await db.commit()
 
-    # 7. Generar refresh token persistido y access token
     refresh = await auth_service.issue_refresh_token(db, user.id)
     access_token = create_access_token(str(user.id), user.role)
     refresh_token = create_refresh_token(str(user.id), refresh.jti)
@@ -277,7 +289,6 @@ async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)
     if stored is None or stored.revoked:
         raise errors.unauthorized("Refresh token revocado.")
 
-    # Rotación: revoca el actual y emite uno nuevo
     stored.revoked = True
     user = await db.get(User, stored.user_id)
     new_refresh = await auth_service.issue_refresh_token(db, user.id)
@@ -323,7 +334,6 @@ async def forgot_password(
     ).scalar_one_or_none()
     if user:
         raw = await auth_service.create_password_reset(db, user.id)
-        # En producción se enviaría por email; en stub queda registrado.
         import logging
         logging.getLogger("auth").info("[RESET-STUB] token para %s: %s", body.email, raw)
     return {"sent": True}
