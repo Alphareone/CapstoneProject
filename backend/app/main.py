@@ -19,7 +19,7 @@ API del backend de la **App de Oportunidades de Remate — New Jersey**.
 
 Permite a inversionistas explorar propiedades en remate por *county* o código
 postal, revisar la ficha de detalle (financiera, legal y física) y consultar el
-**semáforo de riesgo** (verde/amarillo/rojo) calculado por el motor de reglas.
+**semáforo de riesgo** (verde/amarillo/rojo) calculated por el motor de reglas.
 
 Módulos: autenticación y 2FA · usuarios y perfil · geografía · propiedades ·
 semáforo y reglas · guardadas · cobertura · alertas · administración/ingesta ·
@@ -48,9 +48,17 @@ app = FastAPI(
     ],
 )
 
+# Configuración de orígenes permitidos para habilitar credenciales (JWT/cookies) sin conflictos de CORS
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://capstone-project-ruddy-gamma.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite cualquier origen en desarrollo (incluyendo los dominios de Codespaces)
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Soporta cualquier vista previa desplegada por Vercel
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
