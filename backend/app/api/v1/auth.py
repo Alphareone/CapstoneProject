@@ -214,31 +214,48 @@ async def resend_2fa(
 async def verify_2fa(
     body: Verify2FARequest, request: Request, db: AsyncSession = Depends(get_db)
 ):
+    _rate_limit(request, "2fa_verify")
+
     # 1. Obtener el reto desde la BD con el ID enviado por el frontend
     challenge = await db.get(OtpChallenge, body.challenge_id)
     if challenge is None:
         raise errors.not_found("Reto de verificación no encontrado.")
 
-    # 2. Obtener al usuario que realmente creó ese reto
+    # 2. VALIDAR EL CÓDIGO INGRESADO CONTRA EL HASH EN BD
+    status_otp = auth_service.verify_otp_code(challenge, body.code)
+    
+    if status_otp == "expired":
+        raise errors.bad_request("El código de verificación ha expirado o superó los intentos permitidos.")
+    elif status_otp == "invalid":
+        # Guarda el número de intentos fallidos en la BD
+        await db.commit()
+        raise errors.bad_request("Código de verificación incorrecto.")
+
+    # 3. Marcar el reto como consumido para evitar reutilización
+    challenge.consumed = True
+
+    # 4. Obtener al usuario que realmente creó ese reto
     user = await db.get(User, challenge.user_id)
     if user is None:
         raise errors.not_found("Usuario no encontrado.")
 
-    # 3. Activar usuario si estaba inactivo y guardar cambios
+    # 5. Activar usuario si estaba inactivo
     if not user.is_active:
         user.is_active = True
-        await db.commit()
 
-    # 4. Generar tokens reales para ese usuario
-    jti = str(uuid.uuid4())
+    # 6. Guardar cambios (reto consumido y estado de usuario)
+    await db.commit()
+
+    # 7. Generar refresh token persistido y access token
+    refresh = await auth_service.issue_refresh_token(db, user.id)
     access_token = create_access_token(str(user.id), user.role)
-    refresh_token = create_refresh_token(str(user.id), jti)
+    refresh_token = create_refresh_token(str(user.id), refresh.jti)
 
     return TokenPair(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=3600
+        expires_in=access_expires_in()
     )
 
 

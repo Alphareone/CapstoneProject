@@ -7,6 +7,7 @@ Documentación interactiva:
 """
 from fastapi import FastAPI
 from celery import Celery
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.api.v1.utility import router as utility_router
@@ -45,6 +46,14 @@ app = FastAPI(
         {"name": "Administración e ingesta", "description": "Reglas del motor, alta/edición de propiedades e ingesta (roles elevados)."},
         {"name": "Utilidad", "description": "Health check."},
     ],
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite cualquier origen en desarrollo (incluyendo los dominios de Codespaces)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # === TRABAJADOR EN SEGUNDO PLANO (CELERY) ===
