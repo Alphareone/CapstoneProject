@@ -34,11 +34,13 @@ def mask_phone(phone: str | None) -> str | None:
 
 
 def send_email_otp(to_email: str, code: str) -> None:
-    """Envía el código de verificación por correo electrónico usando SMTP."""
-    smtp_user = getattr(settings, "SMTP_USER", None) or os.getenv("SMTP_USER")
-    smtp_host = getattr(settings, "SMTP_HOST", None) or os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(getattr(settings, "SMTP_PORT", None) or os.getenv("SMTP_PORT", 465))
-    smtp_pass = getattr(settings, "SMTP_PASSWORD", None) or os.getenv("SMTP_PASSWORD")
+    """Envía el código de verificación por correo electrónico usando SSL en puerto 465."""
+    smtp_user = os.getenv("SMTP_USER") or getattr(settings, "SMTP_USER", None)
+    smtp_pass = os.getenv("SMTP_PASSWORD") or getattr(settings, "SMTP_PASSWORD", None)
+    smtp_host = os.getenv("SMTP_HOST") or getattr(settings, "SMTP_HOST", "smtp.gmail.com")
+    
+    # Se fuerza explícitamente el puerto 465 (SSL) para evitar bloqueos en Render
+    smtp_port = 465
 
     if not smtp_user or not smtp_pass:
         print(f"[EMAIL-STUB] (Falta SMTP_USER o SMTP_PASSWORD en .env) Para {to_email}: Tu código ClearBid NJ es {code}")
@@ -61,16 +63,10 @@ Si no solicitaste este código, puedes ignorar este mensaje.
 """
         msg.attach(MIMEText(body, "plain"))
 
-        # Selecciona el método según el puerto: SSL para 465, TLS/STARTTLS para 587
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_user, to_email, msg.as_string())
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_user, to_email, msg.as_string())
+        # Conexión directa mediante SSL (puerto 465) con timeout de 10s
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, to_email, msg.as_string())
 
         print(f"[EMAIL-SUCCESS] Código enviado correctamente a {to_email}")
     except Exception as e:
