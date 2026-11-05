@@ -1,12 +1,10 @@
 """Lógica de apoyo para autenticación, 2FA y tokens."""
 import hashlib
 import secrets
-import smtplib
-import socket
 import os
+import urllib.request
+import json
 from datetime import datetime, timedelta, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from fastapi import BackgroundTasks
 from sqlalchemy import select
@@ -35,46 +33,39 @@ def mask_phone(phone: str | None) -> str | None:
 
 
 def send_email_otp(to_email: str, code: str) -> None:
-    """Envía el código de verificación usando SMTP por puerto 587 con STARTTLS sobre IPv4."""
-    smtp_user = os.getenv("SMTP_USER") or getattr(settings, "SMTP_USER", None)
-    smtp_pass = os.getenv("SMTP_PASSWORD") or getattr(settings, "SMTP_PASSWORD", None)
-    smtp_host = os.getenv("SMTP_HOST") or getattr(settings, "SMTP_HOST", "smtp.gmail.com")
+    """Envía el código usando Resend API (vía HTTPS puerto 443 para evitar bloqueos en Render)."""
+    resend_api_key = os.getenv("RESEND_API_KEY")
 
-    if not smtp_user or not smtp_pass:
-        print(f"[EMAIL-STUB] (Falta SMTP_USER o SMTP_PASSWORD) Para {to_email}: Tu código es {code}")
+    if not resend_api_key:
+        print(f"[EMAIL-STUB] (Falta RESEND_API_KEY) Para {to_email}: Tu código ClearBid es {code}")
+        print(f"[EMAIL-FALLBACK] Código para {to_email}: {code}")
         return
 
     try:
-        msg = MIMEMultipart()
-        sender_name = getattr(settings, "EMAILS_FROM_NAME", "ClearBid NJ") or os.getenv("EMAILS_FROM_NAME", "ClearBid NJ Auth")
-        msg["From"] = f"{sender_name} <{smtp_user}>"
-        msg["To"] = to_email
-        msg["Subject"] = f"Código de verificación ClearBid NJ: {code}"
+        url = "https://api.resend.com/emails"
+        headers = {
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # Resend permite enviar desde 'onboarding@resend.dev' durante pruebas
+        payload = {
+            "from": "ClearBid NJ <onboarding@resend.dev>",
+            "to": [to_email],
+            "subject": f"Código de verificación ClearBid NJ: {code}",
+            "html": f"<p>Hola,</p><p>Tu código de verificación para ClearBid NJ es: <strong>{code}</strong></p><p>Caduca en 5 minutos.</p>"
+        }
 
-        body = f"""
-Hola,
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
 
-Tu código de verificación para ClearBid NJ es: {code}
-
-Este código caducará en 5 minutos.
-Si no solicitaste este código, puedes ignorar este mensaje.
-"""
-        msg.attach(MIMEText(body, "plain"))
-
-        # Resolver IP IPv4 explícitamente para evitar bloqueos IPv6 en Render
-        resolved_ip = socket.gethostbyname(smtp_host)
-
-        # Probar vía puerto 587 con TLS y handshake limpio
-        with smtplib.SMTP(resolved_ip, 587, timeout=10) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, to_email, msg.as_string())
-
-        print(f"[EMAIL-SUCCESS] Código enviado correctamente a {to_email}")
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status in (200, 201):
+                print(f"[EMAIL-SUCCESS] Correo enviado exitosamente vía Resend API a {to_email}")
+            else:
+                print(f"[EMAIL-ERROR] Resend API respondió con estado {response.status}")
     except Exception as e:
-        print(f"[EMAIL-ERROR] Fallo al enviar correo a {to_email} ({smtp_host}): {type(e).__name__} - {e}")
+        print(f"[EMAIL-ERROR] Fallo al enviar correo vía Resend API a {to_email}: {e}")
         print(f"[EMAIL-FALLBACK] Código para {to_email}: {code}")
 
 
