@@ -35,16 +35,13 @@ def mask_phone(phone: str | None) -> str | None:
 
 
 def send_email_otp(to_email: str, code: str) -> None:
-    """Envía el código de verificación por correo electrónico usando SSL sobre IPv4."""
+    """Envía el código de verificación usando SMTP por puerto 587 con STARTTLS sobre IPv4."""
     smtp_user = os.getenv("SMTP_USER") or getattr(settings, "SMTP_USER", None)
     smtp_pass = os.getenv("SMTP_PASSWORD") or getattr(settings, "SMTP_PASSWORD", None)
     smtp_host = os.getenv("SMTP_HOST") or getattr(settings, "SMTP_HOST", "smtp.gmail.com")
-    
-    # Se fuerza explícitamente el puerto 465 (SSL)
-    smtp_port = 465
 
     if not smtp_user or not smtp_pass:
-        print(f"[EMAIL-STUB] (Falta SMTP_USER o SMTP_PASSWORD en .env) Para {to_email}: Tu código ClearBid NJ es {code}")
+        print(f"[EMAIL-STUB] (Falta SMTP_USER o SMTP_PASSWORD) Para {to_email}: Tu código es {code}")
         return
 
     try:
@@ -64,11 +61,14 @@ Si no solicitaste este código, puedes ignorar este mensaje.
 """
         msg.attach(MIMEText(body, "plain"))
 
-        # 1. Resolver IP IPv4 explícitamente para evitar [Errno 101] de IPv6 en Render
+        # Resolver IP IPv4 explícitamente para evitar bloqueos IPv6 en Render
         resolved_ip = socket.gethostbyname(smtp_host)
 
-        # 2. Conectar vía SMTP_SSL forzando timeout de 10s
-        with smtplib.SMTP_SSL(resolved_ip, smtp_port, timeout=10) as server:
+        # Probar vía puerto 587 con TLS y handshake limpio
+        with smtplib.SMTP(resolved_ip, 587, timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(smtp_user, smtp_pass)
             server.sendmail(smtp_user, to_email, msg.as_string())
 
