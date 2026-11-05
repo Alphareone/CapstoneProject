@@ -33,27 +33,35 @@ def mask_phone(phone: str | None) -> str | None:
 
 
 def send_email_otp(to_email: str, code: str) -> None:
-    """Envía el código usando Resend API (vía HTTPS puerto 443 para evitar bloqueos en Render)."""
-    resend_api_key = os.getenv("RESEND_API_KEY")
+    """Envía el código usando Brevo API (vía HTTPS puerto 443 para evitar bloqueos en Render)."""
+    brevo_api_key = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("SMTP_USER") or getattr(settings, "SMTP_USER", None) or "elpapucris1404@gmail.com"
 
-    if not resend_api_key:
-        print(f"[EMAIL-STUB] (Falta RESEND_API_KEY) Para {to_email}: Tu código ClearBid es {code}")
+    if not brevo_api_key:
+        print(f"[EMAIL-STUB] (Falta BREVO_API_KEY en Render) Para {to_email}: Tu código es {code}")
         print(f"[EMAIL-FALLBACK] Código para {to_email}: {code}")
         return
 
     try:
-        url = "https://api.resend.com/emails"
+        url = "https://api.brevo.com/v3/smtp/email"
         headers = {
-            "Authorization": f"Bearer {resend_api_key}",
-            "Content-Type": "application/json"
+            "api-key": brevo_api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
-        
-        # Resend permite enviar desde 'onboarding@resend.dev' durante pruebas
+
         payload = {
-            "from": "ClearBid NJ <onboarding@resend.dev>",
-            "to": [to_email],
+            "sender": {
+                "name": "ClearBid NJ",
+                "email": sender_email
+            },
+            "to": [
+                {
+                    "email": to_email
+                }
+            ],
             "subject": f"Código de verificación ClearBid NJ: {code}",
-            "html": f"<p>Hola,</p><p>Tu código de verificación para ClearBid NJ es: <strong>{code}</strong></p><p>Caduca en 5 minutos.</p>"
+            "htmlContent": f"<html><body><p>Hola,</p><p>Tu código de verificación para ClearBid NJ es: <strong>{code}</strong></p><p>Caduca en 5 minutos.</p></body></html>"
         }
 
         data = json.dumps(payload).encode("utf-8")
@@ -61,11 +69,11 @@ def send_email_otp(to_email: str, code: str) -> None:
 
         with urllib.request.urlopen(req, timeout=10) as response:
             if response.status in (200, 201):
-                print(f"[EMAIL-SUCCESS] Correo enviado exitosamente vía Resend API a {to_email}")
+                print(f"[EMAIL-SUCCESS] Correo enviado exitosamente vía Brevo API a {to_email}")
             else:
-                print(f"[EMAIL-ERROR] Resend API respondió con estado {response.status}")
+                print(f"[EMAIL-ERROR] Brevo API respondió con estado {response.status}")
     except Exception as e:
-        print(f"[EMAIL-ERROR] Fallo al enviar correo vía Resend API a {to_email}: {e}")
+        print(f"[EMAIL-ERROR] Fallo al enviar correo vía Brevo API a {to_email}: {e}")
         print(f"[EMAIL-FALLBACK] Código para {to_email}: {code}")
 
 
