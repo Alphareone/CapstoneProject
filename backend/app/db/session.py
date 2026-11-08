@@ -9,10 +9,17 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import settings
 
+# Este parámetro solo pertenece al dialecto asyncpg. SQLite/aiosqlite no lo acepta.
+connect_args = (
+    {"prepared_statement_cache_size": 0}
+    if settings.DATABASE_URL.startswith("postgresql+asyncpg://")
+    else {}
+)
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
-    connect_args={"prepared_statement_cache_size": 0},
+    connect_args=connect_args,
     pool_pre_ping=True,
     future=True,
 )

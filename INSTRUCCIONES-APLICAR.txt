@@ -1,0 +1,80 @@
+CLEARBID NJ — AUTOMATIZACIÓN DEL SEMÁFORO Y ANTECEDENTES DOCUMENTALES
+Versión de motor: 2.5
+
+QUÉ HACE ESTE PAQUETE
+1. Corrige el motor para que los datos ausentes sean UNKNOWN y nunca un PASS automático.
+2. Separa el semáforo definitivo de los antecedentes documentales preliminares.
+3. Carga automáticamente los antecedentes disponibles de las 11 propiedades por dirección normalizada.
+4. Muestra MODERATE · PROVISIONAL en tarjetas, tabla, mapa y ficha cuando existe una advertencia documental, pero la evaluación definitiva sigue incompleta.
+5. Añade los antecedentes detallados en la pestaña Legal.
+6. Evita considerar total_liens = 0 como ausencia confirmada de gravámenes mientras total_liens_verified sea NULL.
+7. Ejecuta migraciones y bootstrap de reglas/evidencia automáticamente al iniciar el contenedor API.
+
+APLICAR SIN REEMPLAZAR TODO EL PROYECTO
+1. Haz una copia de seguridad de tu carpeta actual:
+   D:\Nueva carpeta\CapstoneProject-main
+2. Descomprime este ZIP directamente dentro de:
+   D:\Nueva carpeta\CapstoneProject-main
+3. Conserva las carpetas backend y web. Acepta sobrescribir solamente los archivos incluidos en este ZIP.
+   NO reemplaces la carpeta completa del proyecto y NO borres .env, credenciales ni otros archivos locales.
+
+ARRANQUE AUTOMÁTICO DEL BACKEND
+Abre PowerShell en:
+D:\Nueva carpeta\CapstoneProject-main\backend
+
+Ejecuta:
+   docker compose up -d --build api worker
+
+El contenedor API ejecuta automáticamente:
+   alembic upgrade head
+   python initialize_risk_system.py
+   uvicorn app.main:app ...
+
+No es necesario ejecutar manualmente alembic ni seed_risk_rules.py después de este arranque.
+El bootstrap inserta reglas que falten, actualiza la regla TOTAL_LIENS_REVIEW para exigir verificación
+explícita, carga los 11 antecedentes y recalcula resultados cuando corresponde. No cambia credenciales.
+
+COMPROBAR EL ARRANQUE
+   docker compose ps
+   docker compose logs api --tail 100
+
+Busca una línea similar a:
+   RISK SYSTEM READY: 11/11 documentary records; ... engine 2.5.
+
+Si aparece DOCUMENTARY ADDRESS NOT MATCHED, esa dirección no coincidió de forma única y no se
+asignó evidencia a otra propiedad por aproximación.
+
+FRONTEND
+Desde:
+D:\Nueva carpeta\CapstoneProject-main\web
+
+Ejecuta:
+   npm run lint
+   npm run build
+
+Después sube los cambios a GitHub para que Vercel despliegue el frontend actualizado.
+
+CLASIFICACIÓN DOCUMENTAL INICIAL
+- 124 Albemarle Avenue: MODERATE · PROVISIONAL.
+- 114 Mercer Street: MODERATE · PROVISIONAL.
+- 84 Lambertville Hopewell Road: MODERATE · PROVISIONAL.
+- 4216 Nottingham Way: MODERATE · PROVISIONAL por ocupación registrada.
+- 183 Hollow Brook Road: REQUIERE REVISIÓN; posible discrepancia de dirección/parcela.
+- 2465 Pennington Road: REQUIERE REVISIÓN; certificado redimido y otro antecedente sin desenlace confirmado.
+- 11 Trent Street, 229 Mount Lucas Road, 739 William Street, 74 Louise Lane y 99 West Street:
+  INFORMACIÓN INSUFICIENTE. No se presentan como LOW / CLEAR.
+
+IMPORTANTE SOBRE AUTOMATIZACIÓN
+El motor y la carga de los antecedentes conocidos sí quedan automatizados al iniciar la API.
+El paquete NO realiza scraping ni consulta en vivo registros del gobierno de EE.UU. Los portales
+consultados no se integraron como API automática y no sería correcto inventar actualizaciones.
+Para las 11 propiedades se utiliza el conjunto de antecedentes ya investigado y se conserva la
+fecha/referencia de cada registro. Los importes se guardan como reported_amount, no como saldo actual.
+
+Los importes históricos de expedientes, tax sale y certificados NO se suman ni se copian a
+property_financials.total_liens, surviving_irs_lien o senior_liens.
+El mensaje hipotecario antiguo de USD 276,363 de 4216 Nottingham Way queda expresamente excluido
+como deuda confirmada porque coincide con opening_price.
+
+VERIFICACIÓN SQL
+Ejecuta backend/verify_documentary_risk.sql en Supabase SQL Editor después del arranque.

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 
-import { runExport } from "@/hooks/useExport";
+import { downloadExport, runExport } from "@/hooks/useExport";
 import { useSavedBatch } from "@/hooks/useSaved";
 import { useToast } from "@/store/toast";
 
@@ -25,11 +25,15 @@ export default function SelectionBar({
 
   async function exportCsv() {
     toast(t("export_preparing"));
-    const job = await runExport({ format: "csv", property_ids: ids });
-    if (job.status === "completed" && job.download_url) {
-      toast(t("export_ready"));
-      window.open(job.download_url, "_blank");
-    } else {
+    try {
+      const job = await runExport({ format: "csv", property_ids: ids });
+      if (job.status === "completed" && job.download_url) {
+        await downloadExport(job.job_id, "csv");
+        toast(t("export_ready"));
+      } else {
+        toast(job.error_message || t("error"));
+      }
+    } catch {
       toast(t("error"));
     }
   }

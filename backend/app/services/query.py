@@ -3,7 +3,7 @@
 Reutilizado por GET /properties, /properties/facets, exportación, batch y
 segmentos (secciones 5.4 y 6).
 """
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.property import Property, PropertyFinancial, PropertyLegal
@@ -34,7 +34,10 @@ def apply_filters(
     if zip:
         stmt = stmt.where(Property.zip == zip)
     if flag:
-        stmt = stmt.where(Property.flag.in_(flag))
+        provisional_ids = select(PropertyLegal.property_id).where(
+            PropertyLegal.property_id == Property.id, PropertyLegal.documentary_flag.in_(flag)
+        ).exists()
+        stmt = stmt.where(or_(Property.flag.in_(flag), and_(Property.flag.is_(None), provisional_ids)))
     if property_type:
         stmt = stmt.where(Property.property_type.in_(property_type))
     if q:

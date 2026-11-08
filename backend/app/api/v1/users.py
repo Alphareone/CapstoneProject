@@ -60,7 +60,7 @@ async def update_me(
     if body.last_name is not None:
         user.last_name = body.last_name
     if body.phone and body.phone != user.phone:
-        # Marca no verificado y dispara reverificación por SMS
+        # Marca no verificado y dispara reverificación por correo electrónico
         user.phone = body.phone
         user.phone_verified = False
         await auth_service.create_otp_challenge(
@@ -91,7 +91,7 @@ async def change_password(
 
 @router.post(
     "/me/phone/verify",
-    summary="Verificar nuevo teléfono con código SMS",
+    summary="Verificar nuevo teléfono con código de verificación",
     responses={401: {"description": "Código inválido"}, 410: {"description": "Expirado"}},
 )
 async def verify_phone(

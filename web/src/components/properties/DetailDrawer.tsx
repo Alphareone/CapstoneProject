@@ -11,9 +11,9 @@ import type { RuleResult } from "@/types/api";
 
 type Tab = "fin" | "leg" | "fis" | "sem";
 const SEVERITY_COLOR: Record<string, string> = {
-  info: "var(--green)",
-  warning: "var(--amber)",
-  critical: "var(--red)",
+  info: "#1A5C2E",
+  warning: "#7A4800",
+  critical: "#8B1A1A",
 };
 
 export default function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
@@ -79,7 +79,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                 </span>
               </div>
               <div className="mt-2">
-                <FlagPill flag={p.flag} />
+                <FlagPill flag={p.flag} provisionalFlag={p.legal.documentary_flag} />
               </div>
             </div>
 
@@ -110,7 +110,12 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                     <div className="text-xs text-ink2">{t("roi_cap")}</div>
                   </div>
                   <KV k={t("fin_opening")} v={money(p.financial.opening_price)} />
-                  <KV k={t("fin_liens")} v={money(p.financial.total_liens)} />
+                  <KV
+                    k={t("fin_liens")}
+                    v={p.financial.total_liens_verified === true
+                      ? money(p.financial.total_liens)
+                      : `${money(p.financial.total_liens)} · ${t("not_verified")}`}
+                  />
                   <KV k={t("fin_arv")} v={money(p.financial.arv)} />
                   <KV k={t("fin_repairs")} v={money(p.financial.estimated_repairs)} />
                   <KV k={t("fin_maxbid")} v={money(p.financial.suggested_max_bid)} />
@@ -130,6 +135,41 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                   <KV k={t("leg_title")} v={p.legal.title_status ?? "—"} />
                   <KV k={t("leg_occ")} v={p.legal.occupancy ?? "—"} />
                   <KV k={t("leg_deposit")} v={money(p.legal.required_deposit)} />
+                  <KV k={t("leg_irs_lien")} v={money(p.legal.surviving_irs_lien)} />
+                  <KV k={t("leg_senior_liens")} v={money(p.legal.senior_liens)} />
+                  <KV k={t("leg_bankruptcy")} v={p.legal.bankruptcy_indicator === null || p.legal.bankruptcy_indicator === undefined ? "—" : p.legal.bankruptcy_indicator ? t("yes") : t("no")} />
+                  <KV k={t("leg_open_permits")} v={p.legal.open_permits_count === null || p.legal.open_permits_count === undefined ? "—" : String(p.legal.open_permits_count)} />
+                  <KV k={t("leg_defendants")} v={p.legal.defendant_count === null || p.legal.defendant_count === undefined ? "—" : String(p.legal.defendant_count)} />
+                  <KV k={t("leg_ownership")} v={p.legal.ownership_type ?? "—"} />
+                  <KV k={t("leg_mortgage")} v={p.legal.mortgage_active === null || p.legal.mortgage_active === undefined ? "—" : p.legal.mortgage_active ? t("yes") : t("no")} />
+                  {p.legal.documentary_status && (
+                    <section className="mt-4 rounded-xl border border-line2 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <b className="text-sm">{t("documentary_title")}</b>
+                        {p.legal.documentary_flag ? (
+                          <FlagPill flag={null} provisionalFlag={p.legal.documentary_flag} />
+                        ) : (
+                          <span className="rounded-full bg-wash px-2 py-1 text-[11px] font-bold text-ink2">
+                            {t(`documentary_status_${p.legal.documentary_status}`)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mb-3 text-[12px] leading-5 text-ink2">{p.legal.documentary_summary}</p>
+                      {(p.legal.documentary_evidence ?? []).map((item, index) => (
+                        <div key={`${item.reference ?? item.title}-${index}`} className="border-t border-line2 py-2 text-[12px]">
+                          <b>{item.title}</b>
+                          <div className="text-ink2">{item.source}{item.reference ? ` · ${item.reference}` : ""}{item.date ? ` · ${item.date}` : ""}</div>
+                          {item.reported_amount !== null && item.reported_amount !== undefined && (
+                            <div className="font-semibold">{money(item.reported_amount)} {item.currency ?? ""}</div>
+                          )}
+                          {item.note && <p className="mt-1 text-ink2">{item.note}</p>}
+                        </div>
+                      ))}
+                      {p.legal.documentary_updated_at && (
+                        <div className="mt-2 text-[10px] text-ink2">{t("documentary_updated")}: {fdate(p.legal.documentary_updated_at)}</div>
+                      )}
+                    </section>
+                  )}
                 </>
               )}
               {tab === "fis" && (
@@ -159,20 +199,46 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                         ? t("flag_g")
                         : flagShort(p.flag) === "a"
                           ? t("flag_a")
-                          : t("flag_r")}
+                          : flagShort(p.flag) === "r"
+                            ? t("flag_r")
+                            : t("flag_pending")}
                     </b>
                   </div>
+                  {p.flag === null && (
+                    <p className="mb-3 text-[13px] text-ink2">
+                      {!p.traffic_light
+                        ? t("risk_no_result")
+                        : p.traffic_light.evaluation_status === "not_configured"
+                          ? t("risk_rules_missing")
+                          : t("risk_data_incomplete")}
+                    </p>
+                  )}
+                  {p.flag !== null && p.traffic_light?.evaluation_status === "incomplete" && (
+                    <p className="mb-3 text-[13px] text-ink2">{t("risk_data_incomplete")}</p>
+                  )}
+                  {p.legal.documentary_status && (
+                    <div className="mb-3 rounded-xl border border-line2 p-3">
+                      <b className="text-[13px]">{t("documentary_title")}</b>
+                      <p className="mt-1 text-[12px] leading-5 text-ink2">{p.legal.documentary_summary}</p>
+                    </div>
+                  )}
                   <div className="mb-2 text-xs font-semibold uppercase text-ink2">{t("sem_rules")}</div>
                   {(p.traffic_light?.rules ?? []).map((r: RuleResult, i: number) => (
                     <div key={i} className="mb-2 flex items-start gap-2 text-[13px]">
                       <span
                         className="mt-1 inline-block h-[9px] w-[9px] shrink-0 rounded-full"
-                        style={{ background: SEVERITY_COLOR[r.severity] }}
+                        style={{ background: r.status === "unknown" ? "#777777" : SEVERITY_COLOR[r.severity] }}
                       />
                       <div>
                         <b>{r.title ?? r.code}</b>
                         <br />
-                        <span className="text-ink2">{r.message}</span>
+                        <span className="text-ink2">
+                          {r.status === "unknown"
+                            ? t("risk_rule_unknown")
+                            : r.status === "pass"
+                              ? t("risk_rule_pass")
+                              : `${t("risk_rule_fail")}${r.message ?? ""}`}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -198,5 +264,8 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
 function flagBg(flag: string | null): string {
   const s = flagShort(flag);
-  return s === "g" ? "green-bg" : s === "a" ? "amber-bg" : "red-bg";
+  return s === "g" ? "risk-green-bg"
+    : s === "a" ? "risk-amber-bg"
+    : s === "r" ? "risk-red-bg"
+    : "risk-pending-bg";
 }

@@ -5,8 +5,9 @@ crea desde los modelos (Base.metadata) en cada sesión de test.
 """
 import os
 
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("JWT_SECRET", "test-secret")
+# Las pruebas nunca deben conectarse a la base Supabase configurada para la app.
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["JWT_SECRET"] = "test-secret"
 
 import pytest
 import pytest_asyncio
@@ -66,18 +67,14 @@ async def db_session():
 
 
 @pytest.fixture
-def captured_sms(monkeypatch):
-    """Captura los SMS enviados (incluye el código OTP en el mensaje)."""
-    import re
-
+def captured_email(monkeypatch):
+    """Captura el OTP enviado por correo sin llamar a un proveedor externo."""
     store: list[dict] = []
 
-    class _Capture:
-        async def send(self, phone, message):
-            m = re.search(r"(\d{6})", message)
-            store.append({"phone": phone, "message": message, "code": m.group(1) if m else None})
+    def _capture(to_email: str, code: str) -> None:
+        store.append({"email": to_email, "code": code})
 
-    monkeypatch.setattr("app.services.auth_service.get_sms_provider", lambda: _Capture())
+    monkeypatch.setattr("app.services.auth_service.send_email_otp", _capture)
     return store
 
 

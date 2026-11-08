@@ -106,7 +106,7 @@ export default function PropertyTable({
                 />
               </td>
               <td className="p-[11px_12px]">
-                <FlagPill flag={p.flag} />
+                <FlagPill flag={p.flag} provisionalFlag={p.documentary_flag} />
               </td>
               <td className="p-[11px_12px]">
                 <b className="block">{p.address}</b>

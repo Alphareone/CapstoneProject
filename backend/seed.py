@@ -88,7 +88,12 @@ async def seed_properties(db, county_id: str):
                 occupancy="occupied",
                 required_deposit=20000,
                 surviving_irs_lien=45000,
-                senior_liens=12000
+                senior_liens=12000,
+                bankruptcy_indicator=False,
+                open_permits_count=0,
+                defendant_count=1,
+                ownership_type="individual",
+                mortgage_active=False,
             ),
             "physical": PropertyPhysical(
                 sqft=1850,
@@ -129,7 +134,12 @@ async def seed_properties(db, county_id: str):
                 occupancy="occupied",
                 required_deposit=17000,
                 surviving_irs_lien=0,
-                senior_liens=0
+                senior_liens=0,
+                bankruptcy_indicator=False,
+                open_permits_count=0,
+                defendant_count=1,
+                ownership_type="individual",
+                mortgage_active=False,
             ),
             "physical": PropertyPhysical(
                 sqft=2100,
@@ -151,7 +161,7 @@ async def seed_properties(db, county_id: str):
             "zip": "08619",
             "county_id": county_id,
             "property_type": "single_family",
-            "flag": "green",  # Verde: Inocupada y limpia
+            "flag": "yellow",  # Amarillo: gravámenes informados que requieren revisión
             "financial": PropertyFinancial(
                 opening_price=145000,
                 total_liens=138000,
@@ -170,7 +180,12 @@ async def seed_properties(db, county_id: str):
                 occupancy="vacant",
                 required_deposit=29000,
                 surviving_irs_lien=0,
-                senior_liens=0
+                senior_liens=0,
+                bankruptcy_indicator=False,
+                open_permits_count=0,
+                defendant_count=1,
+                ownership_type="individual",
+                mortgage_active=False,
             ),
             "physical": PropertyPhysical(
                 sqft=2400,

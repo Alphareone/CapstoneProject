@@ -54,14 +54,14 @@ class RefreshToken(Base, TimestampMixin):
 
 
 class OtpChallenge(Base, TimestampMixin):
-    """Reto 2FA por SMS. Puede existir antes de activar la cuenta."""
+    """Reto 2FA por correo electrónico. Puede existir antes de activar la cuenta."""
     __tablename__ = "otp_challenges"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: new_id("chl"))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     code_hash: Mapped[str] = mapped_column(String, nullable=False)
     purpose: Mapped[str] = mapped_column(String(30), default="login", nullable=False)  # login|register|phone_change
-    method: Mapped[str] = mapped_column(String(10), default="sms", nullable=False)
+    method: Mapped[str] = mapped_column(String(10), default="email", nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     consumed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

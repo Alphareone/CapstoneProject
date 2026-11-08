@@ -93,6 +93,7 @@ async def list_properties(
         PropertyListItem(
             id=p.id, address=p.address, city=p.city, zip=p.zip, county_id=p.county_id,
             property_type=p.property_type, flag=p.flag,
+            documentary_flag=p.legal.documentary_flag if p.legal else None,
             opening_price=p.financial.opening_price if p.financial else None,
             estimated_value=p.financial.arv if p.financial else None,
             estimated_roi=p.financial.estimated_roi if p.financial else None,
@@ -135,7 +136,10 @@ async def facets(
 
     flag_rows = (
         await db.execute(
-            select(Property.flag, func.count()).where(Property.id.in_(ids)).group_by(Property.flag)
+            select(func.coalesce(Property.flag, PropertyLegal.documentary_flag), func.count())
+            .outerjoin(PropertyLegal, PropertyLegal.property_id == Property.id)
+            .where(Property.id.in_(ids))
+            .group_by(func.coalesce(Property.flag, PropertyLegal.documentary_flag))
         )
     ).all()
     ptype_rows = (
@@ -194,15 +198,17 @@ async def properties_map(
     from app.models.property import PropertyPhysical
 
     stmt = (
-        select(Property, PropertyPhysical, PropertyFinancial)
+        select(Property, PropertyPhysical, PropertyFinancial, PropertyLegal)
         .join(PropertyPhysical, PropertyPhysical.property_id == Property.id)
         .outerjoin(PropertyFinancial, PropertyFinancial.property_id == Property.id)
+        .outerjoin(PropertyLegal, PropertyLegal.property_id == Property.id)
         .where(Property.archived.is_(False))
     )
     if county_id:
         stmt = stmt.where(Property.county_id == county_id)
     if flag:
-        stmt = stmt.where(Property.flag.in_(flag))
+        from sqlalchemy import or_, and_
+        stmt = stmt.where(or_(Property.flag.in_(flag), and_(Property.flag.is_(None), PropertyLegal.documentary_flag.in_(flag))))
     if bbox:
         try:
             min_lng, min_lat, max_lng, max_lat = map(float, bbox.split(","))
@@ -214,14 +220,15 @@ async def properties_map(
         )
 
     features = []
-    for p, phys, fin in (await db.execute(stmt)).all():
+    for p, phys, fin, legal in (await db.execute(stmt)).all():
         if phys.lat is None or phys.lng is None:
             continue
         features.append(
             GeoFeature(
                 geometry={"type": "Point", "coordinates": [phys.lng, phys.lat]},
                 properties={
-                    "id": p.id, "flag": p.flag,
+                    "id": p.id, "flag": p.flag or (legal.documentary_flag if legal else None),
+                    "provisional": p.flag is None and bool(legal and legal.documentary_flag),
                     "opening_price": fin.opening_price if fin else None,
                 },
             )
@@ -253,7 +260,8 @@ async def _traffic_light_out(db: AsyncSession, property_id: str) -> TrafficLight
         )
     ).scalars().all()
     return TrafficLightOut(
-        flag=res.flag, engine_version=res.engine_version, generated_at=res.generated_at,
+        flag=res.flag, evaluation_status=res.evaluation_status,
+        engine_version=res.engine_version, generated_at=res.generated_at,
         rules=[
             RuleResultOut(
                 code=r.rule_code, status=r.status, severity=r.severity,
@@ -279,13 +287,22 @@ async def get_property(
     import json
 
     photos = json.loads(p.photos) if p.photos else []
+    if p.legal:
+        legal_data = {column.name: getattr(p.legal, column.name) for column in p.legal.__table__.columns}
+        try:
+            payload = json.loads(legal_data.get("documentary_evidence") or "{}")
+            legal_data["documentary_evidence"] = payload.get("items", [])
+        except (ValueError, TypeError):
+            legal_data["documentary_evidence"] = []
+        legal_block = LegalBlock.model_validate(legal_data)
+    else:
+        legal_block = LegalBlock()
     return PropertyDetail(
         id=p.id, address=p.address, city=p.city, zip=p.zip, county_id=p.county_id,
         property_type=p.property_type, flag=p.flag, photos=photos,
         financial=FinancialBlock.model_validate(p.financial, from_attributes=True)
         if p.financial else FinancialBlock(),
-        legal=LegalBlock.model_validate(p.legal, from_attributes=True)
-        if p.legal else LegalBlock(),
+        legal=legal_block,
         physical=PhysicalBlock.model_validate(p.physical, from_attributes=True)
         if p.physical else PhysicalBlock(),
         traffic_light=await _traffic_light_out(db, property_id),

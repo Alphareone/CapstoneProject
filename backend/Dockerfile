@@ -18,4 +18,4 @@ COPY . .
 EXPOSE 8000
 
 # Ejecuta migraciones y arranca el servidor
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python initialize_risk_system.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

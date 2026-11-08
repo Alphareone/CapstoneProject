@@ -1,28 +1,68 @@
+# Servicios de ClearBid NJ. Ejecutar desde backend/: docker compose up --build
+x-backend-environment: &backend-environment
+  # Se conservan los valores que ya tenía el proyecto, sin modificarlos.
+  DATABASE_URL: "postgresql+asyncpg://postgres.uxaeutpgbwunpwpgmvio:ALPHAprime159%25@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+  JWT_SECRET: "change-me-in-production"
+  SMS_PROVIDER: stub
+  PUSH_PROVIDER: stub
+  OAUTH_PROVIDER_MODE: stub
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  EXPORT_STORAGE_DIR: /var/lib/clearbid/exports
+  EXPORT_EXPIRE_HOURS: "6"
+
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres.uxaeutpgbwunpwpgmvio:ALPHAprime159%25@aws-0-us-east-1.pooler.supabase.com:5432/postgres
-      JWT_SECRET: change-me-in-production
-      SMS_PROVIDER: stub
-      PUSH_PROVIDER: stub
-      OAUTH_PROVIDER_MODE: stub
+      <<: *backend-environment
     ports:
       - "8000:8000"
+    volumes:
+      - clearbid_exports:/var/lib/clearbid/exports
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: backend-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: backend-worker
-    command: "celery -A app.main:celery_app worker --loglevel=info"
-    volumes:
-      - .:/app
+    command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=info", "--queues=default"]
     environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
+      <<: *backend-environment
+    volumes:
+      - clearbid_exports:/var/lib/clearbid/exports
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  clearbid_exports:

@@ -5,9 +5,10 @@ import { flagShort, money } from "@/lib/format";
 import { useFilterStore } from "@/store/filters";
 
 const COLOR: Record<string, string> = {
-  g: "var(--green)",
-  a: "var(--amber)",
-  r: "var(--red)",
+  g: "#1A5C2E",
+  a: "#7A4800",
+  r: "#8B1A1A",
+  p: "#777777",
 };
 
 // Centro aproximado de New Jersey.
@@ -33,7 +34,7 @@ export default function PropertyMap({ onOpen }: { onOpen: (id: string) => void }
               key={f.id}
               center={[f.lat, f.lng]}
               radius={9}
-              pathOptions={{ color: COLOR[s], fillColor: COLOR[s], fillOpacity: 0.85, weight: 2 }}
+              pathOptions={{ color: COLOR[s], fillColor: COLOR[s], fillOpacity: 0.85, weight: 2, dashArray: f.provisional ? "4 3" : undefined }}
               eventHandlers={{ click: () => onOpen(f.id) }}
             >
               <Popup>{money(f.opening_price)}</Popup>

@@ -4,7 +4,7 @@ Todas las rutas requieren rol elevado (analyst o admin según el caso).
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +35,7 @@ from app.schemas.rules import (
     RuleList,
     UpdateRuleRequest,
 )
-from app.services import jobs_service
+from app.tasks.jobs import process_ingest_job
 from app.services.property_service import recalculate_traffic_light
 
 router = APIRouter(prefix="/admin", tags=["Administración e ingesta"])
@@ -56,6 +56,7 @@ async def recalculate(
         raise errors.not_found("Propiedad inexistente.")
     return RecalculateResponse(
         flag=result.flag,
+        evaluation_status=result.evaluation_status,
         engine_version=result.engine_version,
         recalculated_at=result.generated_at.isoformat(),
     )
@@ -236,7 +237,7 @@ async def delete_property(
     responses={403: {}, 422: {}},
 )
 async def start_ingest(
-    body: IngestRequest, background: BackgroundTasks,
+    body: IngestRequest,
     _: User = Depends(require_analyst), db: AsyncSession = Depends(get_db),
 ):
     job = IngestJob(
@@ -245,7 +246,18 @@ async def start_ingest(
     db.add(job)
     await db.flush()
     job_id = job.id
-    background.add_task(jobs_service.run_ingest_job, job_id)
+    await db.commit()
+    try:
+        process_ingest_job.delay(job_id)
+    except Exception as exc:
+        job = await db.get(IngestJob, job_id)
+        if job is not None:
+            job.status = "failed"
+            job.failed = 1
+            job.error_message = "No fue posible enviar el trabajo a la cola Redis."
+            job.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+        raise errors.APIError(503, "queue_unavailable", "No se pudo iniciar la ingesta.") from exc
     return IngestJobResponse(job_id=job_id, status="queued")
 
 
@@ -265,4 +277,5 @@ async def ingest_status(
         job_id=job.id, status=job.status, created=job.created,
         updated=job.updated, failed=job.failed,
         finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        error_message=job.error_message,
     )

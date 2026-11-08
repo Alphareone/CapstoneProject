@@ -17,10 +17,11 @@ export const AUC_LBL: Record<string, string> = {
 };
 
 // Mapea el flag del backend (green/yellow/red) a la clase corta del wireframe.
-export const flagShort = (f: Flag | string | null): "g" | "a" | "r" => {
+export const flagShort = (f: Flag | string | null): "g" | "a" | "r" | "p" => {
   if (f === "green") return "g";
   if (f === "yellow") return "a";
-  return "r";
+  if (f === "red") return "r";
+  return "p";
 };
 
 export function money(n: number | null | undefined): string {

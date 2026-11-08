@@ -20,6 +20,7 @@ class IngestJob(Base, TimestampMixin):
     created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -34,3 +35,4 @@ class ExportJob(Base, TimestampMixin):
     download_url: Mapped[str | None] = mapped_column(String, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     params: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON serializado
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -68,11 +68,13 @@ log (`[SMS-STUB]`, `[RESET-STUB]`).
 ## Motor de semáforo
 
 `app/services/traffic_light.py` evalúa las reglas activas contra los atributos
-de la propiedad. Regla `critical` que falla → **rojo**; `warning` → **amarillo**;
-ninguna → **verde**. Las condiciones se expresan como expresiones sobre
-`financial.*`, `legal.*` y `physical.*`, evaluadas en un sandbox restringido.
-Se administran vía `/api/v1/admin/rules` y se recalculan con
-`/api/v1/admin/properties/{id}/traffic-light/recalculate`.
+de la propiedad. Regla `critical` confirmada → **HIGH / rojo**; `warning`
+confirmada → **MODERATE / amarillo**; sin alertas y con todas las reglas
+completamente evaluadas → **LOW / CLEAR / verde**. Si no hay reglas activas o
+faltan datos requeridos, el semáforo queda **pendiente** (sin color verde).
+Las reglas usan `pass`, `fail` o `unknown` y se administran vía
+`/api/v1/admin/rules`; el catálogo inicial se carga con `python seed_risk_rules.py`.
+Luego se pueden recalcular con `/api/v1/admin/properties/{id}/traffic-light/recalculate`.
 
 ## Roles
 

@@ -26,12 +26,14 @@ class PropertyListItem(BaseModel):
     estimated_roi: float | None = None
     auction_date: datetime | None = None
     thumbnail_url: str | None = None
+    documentary_flag: Flag | None = None
 
 
 # --- Ficha de detalle -------------------------------------------------------
 class FinancialBlock(BaseModel):
     opening_price: int | None = None
     total_liens: int | None = None
+    total_liens_verified: bool | None = None
     arv: int | None = None
     estimated_repairs: int | None = None
     suggested_max_bid: int | None = None
@@ -50,6 +52,16 @@ class LegalBlock(BaseModel):
     # Atributos usados por el motor de reglas (liens que sobreviven a la subasta)
     surviving_irs_lien: int | None = None
     senior_liens: int | None = None
+    bankruptcy_indicator: bool | None = None
+    open_permits_count: int | None = None
+    defendant_count: int | None = None
+    ownership_type: str | None = None
+    mortgage_active: bool | None = None
+    documentary_flag: Flag | None = None
+    documentary_status: str | None = None
+    documentary_summary: str | None = None
+    documentary_evidence: list[dict] = Field(default_factory=list)
+    documentary_updated_at: datetime | None = None
 
 
 class PhysicalBlock(BaseModel):
@@ -68,14 +80,15 @@ class PhysicalBlock(BaseModel):
 
 class RuleResultOut(BaseModel):
     code: str
-    status: str
+    status: str  # pass | fail | unknown
     severity: Severity
     title: str | None = None
     message: str | None = None
 
 
 class TrafficLightOut(BaseModel):
-    flag: Flag
+    flag: Flag | None
+    evaluation_status: str
     engine_version: str
     generated_at: datetime
     rules: list[RuleResultOut] = []

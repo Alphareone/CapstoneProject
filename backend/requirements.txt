@@ -28,5 +28,8 @@ httpx==0.28.1
 aiosqlite==0.20.0
 
 # --- Background Workers / Tareas Asíncronas ---
-celery
-redis
+celery==5.4.0
+redis==6.1.0
+
+# --- Exportación Excel ---
+openpyxl==3.1.5

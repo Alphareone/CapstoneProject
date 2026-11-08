@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, DateTime, Float, ForeignKey, Integer, Numeric, String
+    BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,6 +48,8 @@ class PropertyFinancial(Base):
     )
     opening_price: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     total_liens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # True solo cuando el saldo fue contrastado con una fuente actual. NULL = no verificado.
+    total_liens_verified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     arv: Mapped[int | None] = mapped_column(Integer, nullable=True)  # after-repair value
     estimated_repairs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     suggested_max_bid: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -76,6 +78,17 @@ class PropertyLegal(Base):
     # atributos usados por el motor de reglas (p. ej. liens senior/IRS)
     surviving_irs_lien: Mapped[int | None] = mapped_column(Integer, nullable=True)
     senior_liens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bankruptcy_indicator: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    open_permits_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    defendant_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ownership_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    mortgage_active: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Antecedentes documentales preliminares; separados del semáforo definitivo.
+    documentary_flag: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    documentary_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    documentary_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    documentary_evidence: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON serializado
+    documentary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     property: Mapped["Property"] = relationship(back_populates="legal")
 

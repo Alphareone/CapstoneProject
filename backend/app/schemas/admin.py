@@ -49,3 +49,4 @@ class IngestJobStatus(BaseModel):
     updated: int = 0
     failed: int = 0
     finished_at: str | None = None
+    error_message: str | None = None

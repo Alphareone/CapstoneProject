@@ -6,13 +6,13 @@ Documentación interactiva:
   - OpenAPI    : /openapi.json
 """
 from fastapi import FastAPI
-from celery import Celery
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.api.v1.utility import router as utility_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
+from app.celery_app import celery_app
 
 DESCRIPTION = """
 API del backend de la **App de Oportunidades de Remate — New Jersey**.
@@ -34,7 +34,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=DESCRIPTION,
     openapi_tags=[
-        {"name": "Autenticación y 2FA", "description": "Registro, login, OAuth, 2FA por SMS y tokens."},
+        {"name": "Autenticación y 2FA", "description": "Registro, login, OAuth, 2FA por correo electrónico y tokens."},
         {"name": "Usuarios y perfil", "description": "Perfil, contraseña, teléfono y preferencias."},
         {"name": "Geografía", "description": "Counties y códigos postales de NJ."},
         {"name": "Propiedades", "description": "Listado, ficha de detalle, mapa, facetas y semáforo (lectura)."},
@@ -64,12 +64,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === TRABAJADOR EN SEGUNDO PLANO (CELERY) ===
-celery_app = Celery(
-    "clearbid_worker",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/0"
-)
+# Celery se configura en app/celery_app.py y se importa aquí por compatibilidad.
 
 register_exception_handlers(app)
 

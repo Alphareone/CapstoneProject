@@ -1,0 +1,20 @@
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Entornos y cachés
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+
+# Archivos generados
+storage
+*.sqlite3
+
+# Control de versiones y artefactos
+.git
+.DS_Store

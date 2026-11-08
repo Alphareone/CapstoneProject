@@ -15,7 +15,7 @@ class RegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     user_id: str
     challenge_id: str
-    method: str = "sms"
+    method: str = "email"
     masked_phone: str | None = None
 
 
@@ -26,7 +26,7 @@ class LoginRequest(BaseModel):
 
 class ChallengeResponse(BaseModel):
     challenge_id: str
-    method: str = "sms"
+    method: str = "email"
     masked_phone: str | None = None
 
 

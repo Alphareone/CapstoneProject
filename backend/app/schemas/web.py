@@ -73,6 +73,7 @@ class ExportJobStatus(BaseModel):
     row_count: int | None = None
     download_url: str | None = None
     expires_at: datetime | None = None
+    error_message: str | None = None
 
 
 # --- Batch de favoritos -----------------------------------------------------

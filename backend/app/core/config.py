@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     AUTH_RATE_LIMIT: int = 5
     AUTH_RATE_WINDOW_SECONDS: int = 60
 
+    # Cola de trabajos asíncronos (Celery + Redis)
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    EXPORT_STORAGE_DIR: str = "./storage/exports"
+    EXPORT_EXPIRE_HOURS: int = 6
+
     # External Providers
     SMS_PROVIDER: str = "stub"
     PUSH_PROVIDER: str = "stub"

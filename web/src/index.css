@@ -4,6 +4,13 @@
 
 /* ===== Tokens de diseño (del wireframe) ===== */
 :root {
+  --risk-green-bg: #E8F5E9;
+  --risk-amber-bg: #FFF3E0;
+  --risk-red-bg: #FDECEA;
+  --risk-green-text: #1A5C2E;
+  --risk-amber-text: #7A4800;
+  --risk-red-text: #8B1A1A;
+  --risk-pending-bg: #EEF1F6;
   --ink: #1f2430;
   --ink2: #5b6472;
   --line: #d3d8e0;
@@ -98,9 +105,10 @@ body {
   border-radius: 50%;
   display: inline-block;
 }
-.dot.g { background: var(--green); }
-.dot.a { background: var(--amber); }
-.dot.r { background: var(--red); }
+.dot.g { background: var(--risk-green-text); }
+.dot.a { background: var(--risk-amber-text); }
+.dot.r { background: var(--risk-red-text); }
+.dot.p { background: var(--ink2); }
 
 /* Leaflet: asegurar altura y colores de pines */
 .leaflet-container {

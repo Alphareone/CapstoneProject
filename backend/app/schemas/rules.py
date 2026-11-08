@@ -40,6 +40,7 @@ class UpdateRuleRequest(BaseModel):
 
 
 class RecalculateResponse(BaseModel):
-    flag: str
+    flag: str | None
+    evaluation_status: str
     engine_version: str
     recalculated_at: str
