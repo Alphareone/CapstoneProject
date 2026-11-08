@@ -1,316 +1,92 @@
-# 🏛️ ClearBid NJ — SIPPRI (Sistema de Inteligencia para Propiedades Pre-Subasta e Insights Inmobiliarios)
-
-🌐 **Language / Idioma:** [English](README.md) | [Español](README_ES.md)
-
-> **Proyecto de Título / Capstone (Duoc UC)** — Plataforma integrada para la evaluación, análisis y diagnóstico de riesgo en subastas judiciales e inmobiliarias del Alguacil (*Sheriff’s Sales*) en el estado de Nueva Jersey, con foco inicial en el Condado de Mercer.
-
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Vite](https://img.shields.io/badge/Vite-5.0-646CFF?style=flat-square&logo=vite&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?style=flat-square&logo=postgresql&logoColor=white)
-![Vercel](https://img.shields.io/badge/Vercel-Deployed-000000?style=flat-square&logo=vercel&logoColor=white)
-![Render](https://img.shields.io/badge/Render-Hosted-46E3B7?style=flat-square&logo=render&logoColor=black)
-
----
-
-## 📋 Tabla de Contenidos
-
-1. [Resumen Ejecutivo (Abstract)](#-resumen-ejecutivo-abstract)
-2. [Problema de Negocio y Solución](#-problema-de-negocio-y-solución)
-3. [Arquitectura y Stack Tecnológico](#-arquitectura-y-stack-tecnológico)
-4. [Despliegue e Infraestructura en la Nube](#-despliegue-e-infraestructura-en-la-nube)
-5. [Estructura del Repositorio](#-estructura-del-repositorio)
-6. [Equipo de Desarrollo y Contexto Académico](#-equipo-de-desarrollo-y-contexto-académico)
-7. [Hoja de Ruta SCRUM y Plan de Sprints](#-hoja-de-ruta-scrum-y-plan-de-sprints)
-8. [Guía de Instalación y Desarrollo Local](#-guía-de-instalación-y-desarrollo-local)
-9. [Flujo de Autenticación 2FA (API Brevo) y REST API](#-flujo-de-autenticación-2fa-api-brevo-y-rest-api)
-10. [Aseguramiento de Calidad (QA) y Pruebas Pytest](#-aseguramiento-de-calidad-qa-y-pruebas-pytest)
-11. [Criterios de Aceptación (DoD) y KPIs](#-criterios-de-aceptación-dod-y-kpis)
-12. [Fuentes de Datos y Referencias](#-fuentes-de-datos-y-referencias)
-
----
-
-## 📌 Resumen Ejecutivo (Abstract)
-
-Este proyecto presenta el diseño e implementación de una solución de software integrada enfocada en optimizar la toma de decisiones en inversiones inmobiliarias mediante el análisis de datos espaciales y la automatización de reglas de negocio. Construido sobre una arquitectura desacoplada moderna —utilizando FastAPI y PostgreSQL/Supabase en el backend junto con React, Vite y TypeScript en el frontend— la plataforma responde a los requerimientos técnicos del marco de Proyecto de Título de Duoc UC. El sistema procesa información geográfica y operativa en tiempo real, ejecutando un mecanismo automatizado de semaforización de riesgos (verde/amarillo/rojo) para destacar umbrales críticos. Este documento detalla el diseño arquitectónico, la distribución de infraestructura distribuida en la nube (Vercel + Render + Brevo + UptimeRobot), los protocolos de seguridad y la estrategia de QA.
-
----
-
-## 🎯 Problema de Negocio y Solución
-
-Los inversionistas inmobiliarios que participan en subastas de propiedades en New Jersey, EE. UU. (ejecuciones hipotecarias del Sheriff, *tax liens*, *tax deeds*, propiedades de bancos) se enfrentan a información legal, financiera y física fragmentada y no verificada antes de pujar. Variables críticas —como gravámenes remanentes, estado del título, ocupación, valor estimado tras reparación (ARV) y retorno de inversión (ROI)— son difíciles de consolidar con rapidez.
-
-**ClearBid NJ (SIPPRI)** transforma cada propiedad en un **"Dossier de Inteligencia Pre-Puja"**:
-
-* **Exploración Interactiva:** Filtrado de oportunidades por Condado (foco inicial Condado de Mercer), código ZIP, semáforo de riesgo (Verde/Amarillo/Rojo), tipo de subasta y rango de precios.
-* **Dossier de Propiedad (4 Pestañas):** Desglose estructurado en área Financiera (ARV, precio de apertura, puja máxima sugerida), Legal (número de expediente/docket, estado de títulos, gravámenes), Física (pies cuadrados, dormitorios, condición) y Vecindario.
-* **Motor de Riesgos Automatizado:** Evaluación en tiempo real que determina la viabilidad de la inversión mediante un indicador de semáforo basado en reglas operativas.
-* **Alertas y Exportaciones:** Procesamiento asíncrono en segundo plano para exportación de reportes CSV/Excel y notificaciones automatizadas.
-
----
-
-## 🛠️ Arquitectura y Stack Tecnológico
-
-### Diagrama General de Arquitectura Distribuida
-
-```text
-                  +-----------------------+
-                  |    Cliente (Web)      |
-                  | React 18 / Vite (SPA) | (Hosting: Vercel)
-                  +-----------+-----------+
-                              |
-               HTTP/HTTPS     | CORS Restringido
-                              v
-                  +-----------------------+
-                  |    Backend API        |
-                  |  FastAPI (Python 3.12)| <---+ Ping cada 5 min (UptimeRobot)
-                  +-----+-----------+-----+ (Hosting: Render)
-                        |           |
-             PostgreSQL |           | HTTPS API
-                        v           v
-          +---------------+       +------------------+
-          |   Supabase    |       |    Brevo API     |
-          | (PostgreSQL)  |       |  (2FA / OTP Mail)|
-          +---------------+       +------------------+
-```
-
-### Componentes Principales
-
-* **Backend:** FastAPI (Python 3.12), SQLAlchemy 2.0 (Async), Pydantic v2, Alembic, Uvicorn.
-* **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Zustand, TanStack Query, React-Leaflet.
-* **Base de Datos & Persistencia:** PostgreSQL 16 con extensión PostGIS (`pg_trgm`) alojado en Supabase Cloud Pooler.
-* **Seguridad y Autenticación:** OAuth, JWT con rotación de tokens, hashing Argon2id, verificación 2FA OTP a través de la API HTTPS de **Brevo** (transición desde SMTP para 100% de entregabilidad sin bloqueos de puerto).
-* **DevOps, Monitoreo y Asincronía:** Docker, Docker Compose, Pytest v8.3.4 (`pytest-asyncio`), Celery, Redis, **UptimeRobot** (evitación de hibernación/Cold Start en Render).
-
----
-
-## ☁️ Despliegue e Infraestructura en la Nube
-
-La infraestructura del proyecto opera mediante un esquema desacoplado y distribuido de alta eficiencia:
-
-### 1. Frontend (SPA)
-* **Plataforma:** Vercel (Repositorio independiente).
-* **Enrutamiento:** `HashRouter` para garantizar la resolución sin errores de subrutas en el cliente.
-* **Configuración Serverless:** Archivo `vercel.json` con reglas de reescritura de URL para evitar errores HTTP 404 al recargar páginas SPA.
-* **Internacionalización:** Detección dinámica de idioma mediante `navigator.language`.
-
-### 2. Backend (API RESTful)
-* **Plataforma:** Render.com (Contenedor de aplicaciones Web Service).
-* **Estrategia Anti-Cold-Start:** Integración con **UptimeRobot** realizando pings HTTP periódicos cada 5 minutos al endpoint `/healthcheck`, evitando la suspensión automática de la instancia en la capa gratuita.
-* **Políticas CORS:** Middleware de seguridad restringido únicamente a los orígenes del cliente en Vercel y entornos locales autorizados.
-
-### 3. Autenticación y Comunicaciones
-* **Integración Brevo API:** Generación y envío de códigos OTP de 6 dígitos mediante peticiones HTTPS directas (`POST https://api.brevo.com/v3/smtp/email`), eliminando latencias y bloqueos SMTP. Los códigos OTP cuentan con un tiempo de expiración de **15 minutos**.
-
----
-
-## 📁 Estructura del Repositorio
-
-```text
-clearbid-nj/
-├── backend/                     # API REST FastAPI, motor de reglas y modelos
+# 🏛️ ClearBid NJ — Pre-Auction Intelligence & Real Estate Risk Analytics PlatformInstitutional Real Estate Intelligence Platform — Comprehensive pre-bidding risk analysis, legal title evaluation, automated ROI modeling, and GIS mapping for Sheriff's Foreclosure Sales in New Jersey (focusing on Mercer County).📋 Table of ContentsExecutive SummaryMarket Opportunity & Business SolutionSystem Architecture & Tech StackCloud Infrastructure & DeploymentRepository StructureEngineering Team & StakeholdersAgile Roadmap & Sprint ExecutionGetting Started & Local SetupAuthentication & API ReferenceQuality Assurance (QA) & Test AutomationDefinition of Done (DoD) & Target KPIsData Sources & Legal Disclaimers📌 Executive SummaryClearBid NJ provides real estate investors, private equity funds, and distress-asset buyers with data-driven insights to navigate Sheriff’s Foreclosure Sales across New Jersey. Built on a decoupled cloud architecture—leveraging FastAPI and PostgreSQL/Supabase on the backend alongside a React 18, Vite, and TypeScript frontend—the platform consolidates fragmented legal, tax, and property valuation data in real time.By automating risk scoring via an algorithmic traffic-light indicator (Green / Yellow / Red), ClearBid NJ enables institutional and retail buyers to run automated underwriting pipelines, evaluate title encumbrances, and accurately calculate Maximum Allowable Bids (MAB) before entering county auctions.🎯 Market Opportunity & Business SolutionThe Industry ChallengeParticipating in New Jersey Sheriff Sales (foreclosures, tax liens, bank REOs) is traditionally opaque and high-risk. Investors must manually pull records across county clerk databases, verify superior liens, assess tax arrearages, determine occupancy status, and estimate After Repair Value (ARV)—often with incomplete data and tight auction deadlines.The ClearBid NJ SolutionClearBid NJ transforms raw county foreclosure filings into an Actionable Pre-Bid Dossier:Interactive Deal Finder: Multi-parametric filtering by County (Mercer County pilot), Zip Code, Risk Traffic-Light Score, Auction Type, and Estimated Equity.4-Tab Institutional Dossier:Financials: ARV, Opening Bid, Estimated Lien Amounts, Maximum Allowable Bid (MAB), and ROI projections.Legal & Title: Docket number, plaintiff/defendant details, outstanding senior liens, mortgage status, and title defects.Physical Asset: Living space (sq. ft.), lot size, bedroom/bathroom breakdown, condition score, and occupancy status.Neighborhood & GIS: Interactive geospatial maps, municipal tax rates, school ratings, and comparable sales.Automated Risk Engine: Real-time algorithmic risk evaluation highlighting severe title flaws, high senior debt, or missing documentation.Background Processing & Export: Automated PDF summary reports, CSV market exports, and instant SMS/Email bid alerts.🛠️ System Architecture & Tech StackHigh-Level Distributed Architecture Diagram                  ┌───────────────────────┐
+                  │   Web Client (SPA)    │
+                  │ React 18 / Vite / TS  │ (Hosting: Vercel Cloud)
+                  └───────────┬───────────┘
+                              │
+               HTTP/HTTPS     │ CORS Restricted
+                              ▼
+                  ┌───────────────────────┐
+                  │    Backend API REST   │
+                  │ FastAPI (Python 3.12) │ ◄─── Pings every 5m (UptimeRobot)
+                  └─────┬───────────┬─────┘ (Hosting: Render Web Service)
+                        │           │
+             PostgreSQL │           │ HTTPS API
+                        ▼           ▼
+          ┌───────────────┐       ┌──────────────────┐
+          │   Supabase    │       │    Brevo API     │
+          │ (PostgreSQL)  │       │ (2FA / Mail OTP) │
+          └───────────────┘       └──────────────────┘
+Core Technology StackBackend Framework: FastAPI (Python 3.12), SQLAlchemy 2.0 (AsyncIO), Pydantic v2, Alembic Migrations, Uvicorn ASGI server.Frontend Web Client: React 18, TypeScript 5.0, Vite, Tailwind CSS, Zustand (State Management), TanStack Query, Leaflet GIS mapping.Database & Persistence: PostgreSQL 16 with PostGIS (pg_trgm extension) hosted via Supabase Cloud Connection Pooler.Security & Auth: OAuth 2.0, JWT with token rotation, Argon2id password hashing, and 2FA Multi-Factor Authentication powered by the Brevo HTTPS API (overcoming standard SMTP delivery bottlenecks).DevOps, Monitoring & Async Workers: Docker & Docker Compose, Pytest 8.3.4 (pytest-asyncio), Celery, Redis, and UptimeRobot (preventing Render cold-start latency).☁️ Cloud Infrastructure & DeploymentThe system is deployed using a decoupled, globally distributed cloud infrastructure designed for high availability:1. Frontend Client (Single Page Application)Platform: Vercel Global Edge Network.Routing Strategy: Integrated HashRouter combined with custom vercel.json rewrite rules to prevent 404 routing errors on deep-link reloads.Localization: Automatic language detection fallback (navigator.language) supporting English and Spanish interfaces.2. Backend Web ServicesPlatform: Render.com Web Service environment.Cold-Start Elimination: Integrated with UptimeRobot, triggering automated HTTP GET /healthcheck pings every 5 minutes to prevent container idling on standard tiers.CORS Policy: Strict CORS origin policies restricted to domain white-lists on Vercel and secured local testing environments.3. Authentication & Messaging GatewayBrevo API Integration: Deliverability engine utilizing direct HTTPS API requests (POST https://api.brevo.com/v3/smtp/email) to dispatch 6-digit 2FA OTP tokens with a 15-minute expiration window, ensuring 100% email inbox delivery.📁 Repository Structureclearbid-nj/
+├── backend/                     # Python 3.12 FastAPI core & rules engine
 │   ├── app/
-│   │   ├── api/                 # Endpoints REST versionados (/api/v1/)
-│   │   ├── core/                # Seguridad, JWT, integración Brevo API Key, config
-│   │   ├── db/                  # Modelos SQLAlchemy, sesiones asíncronas
-│   │   ├── schemas/             # Esquemas y validadores Pydantic v2
-│   │   └── services/            # Motor de semáforo de riesgo y cálculo ROI
-│   ├── alembic/                 # Migraciones de base de datos
-│   ├── tests/                   # Suite de pruebas automatizadas Pytest
-│   ├── Dockerfile               # Definición de contenedor de producción
-│   └── requirements.txt         # Dependencias de Python 3.12
-├── frontend/                    # Cliente Web React 18 + TypeScript + Vite
+│   │   ├── api/                 # Versioned REST endpoints (/api/v1/)
+│   │   ├── core/                # Core config, JWT auth, Brevo API handler
+│   │   ├── db/                  # SQLAlchemy models & async DB session managers
+│   │   ├── schemas/             # Pydantic v2 validation schemas
+│   │   └── services/            # Risk scoring engine & ROI underwriting logic
+│   ├── alembic/                 # Database schema migrations
+│   ├── tests/                   # Pytest test automation suite
+│   ├── Dockerfile               # Production container specification
+│   └── requirements.txt         # Backend Python dependencies
+├── frontend/                    # React 18 + TypeScript + Vite web client
 │   ├── src/
-│   │   ├── components/          # Componentes UI reutilizables y tarjetas
-│   │   ├── pages/               # Dashboard, Login, 2FA, detalles de propiedad
-│   │   ├── store/               # Gestores de estado Zustand
-│   │   └── services/            # Cliente API (Axios / TanStack Query)
-│   ├── vercel.json              # Configuración de reescritura de rutas SPA
+│   │   ├── components/          # Reusable UI components & Property Cards
+│   │   ├── pages/               # Dashboard, Login, 2FA, Property Dossier views
+│   │   ├── store/               # Zustand application state management
+│   │   └── services/            # API Client (Axios / TanStack Query)
+│   ├── vercel.json              # Serverless SPA route rewrites
 │   ├── package.json
 │   └── vite.config.ts
-├── docs/                        # Documentación académica y arquitectura Capstone
-│   ├── fase_1/                  # Entregables de Fase 1
-│   ├── arquitectura/            # DER, diagramas C4 y especificaciones OpenAPI
-│   └── evidencias/              # Capturas de ejecución y auditoría
-├── docker/                      # Configuraciones de Dockerfile y Compose
-├── docker-compose.yml           # Orquestación multicontenedor (API, Redis, Worker)
-├── .env.example                 # Plantilla de variables de entorno (sin secretos)
-├── README.md                    # README principal del repositorio (Inglés)
-└── README_ES.md                 # README del repositorio (Versión en Español)
-```
-
----
-
-## 👥 Equipo de Desarrollo y Contexto Académico
-
-### Equipo de Desarrollo (Equipo 2 — Roles SCRUM)
-
-| Nombre | Rol SCRUM | Responsabilidades Principales | Contacto |
-| :--- | :--- | :--- | :--- |
-| **Alfredo Benjamín Castro Alarcón** | Backend Lead & Security | API REST (FastAPI), autenticación OAuth/JWT, integración Brevo API | `alf.castro@duocuc.cl` |
-| **Cristopher Leonardo Hernández Calderón** | Frontend Lead | Interfaz Web (React 18 + TS), despliegue Vercel, i18n, Zustand | `cr.hernandezc@duocuc.cl` |
-| **Felipe Calderón Oliva** | Database & Data Engine Lead | Supabase PostgreSQL/PostGIS, modelos SQLAlchemy, motor de reglas | `fel.calderono@duocuc.cl` |
-| **Matías Enrique Tirado Jeldes** | DevOps, QA & Async Services | Orquestación Docker, Render + UptimeRobot, suite Pytest | `ma.tirado@duocuc.cl` |
-
-### Contexto Académico y Cliente
-
-* **Cliente:** ClearBid NJ, LLC en colaboración con **alloxentric**
-* **Institución:** Duoc UC — Escuela de Informática y Telecomunicaciones (Sede Viña del Mar)
-* **Asignatura:** Proyecto de Título / Capstone (Ingeniería Informática - Plan 1446114)
-* **Semestre:** 2026-2
-
----
-
-## 📑 Hoja de Ruta SCRUM y Plan de Sprints
-
-### Iteraciones Históricas
-
-| Etapa / Iteración | Logros Clave | Evidencias y Artefactos | Estado |
-| :--- | :--- | :--- | :--- |
-| **Fase 1: Configuración Local** | Creación del esquema PostgreSQL local (`clearbid_db` - 25 tablas), hashing Argon2id, dataset inicial. | Consultas pgAdmin 4, modelos preliminares. | ✅ Completado |
-| **Fase 2: Migración a la Nube** | Migración a Supabase Cloud, normalización de tipos de datos, carga de 11 propiedades de Mercer County. | Visualizador ERD Supabase y Editor de Tablas. | ✅ Completado |
-| **Fase 2: Seguridad y 2FA API** | Endpoints de autenticación FastAPI, rotación JWT, migración de SMTP a API HTTPS de Brevo (100% entrega). | Flujo 2FA operativo, validez OTP 15 min. | ✅ Completado |
-| **Fase 3: Despliegue Distribuido** | Frontend SPA en Vercel (`HashRouter`/`vercel.json`), Backend en Render mantenido activo vía UptimeRobot. | Endpoints online, pings cada 5 min. | ✅ Completado |
-
-### Plan de Recuperación y Entregas (Sprints)
-
-* **Sprint 1: Corrección de Auth y Tests:** Refactorización de códigos de estado HTTP (401 Unauthorized para OTP erróneo, 201 Created para registros) y limpieza de secretos.
-* **Sprint 2: Docker e Integración Cloud:** Integración final de Docker Compose conectada a Supabase Pooler e integración del frontend en Vercel.
-* **Sprint 3: Estabilización y Geolocalización:** Integración del visor cartográfico Leaflet/PostGIS para las propiedades de Mercer County.
-* **Entrega Duoc UC:** Demostración integral del sistema, entrega del informe técnico e hito de defensa académica.
-
----
-
-## 🚀 Guía de Instalación y Desarrollo Local
-
-### Prerrequisitos
-
-* Python 3.12+
-* Node.js 18+ y `npm`
-* Git
-* Docker Desktop (Opcional para modo multicontenedor)
-
-### 1. Configuración del Backend (FastAPI)
-
-```bash
-# Clonar el repositorio
+├── docs/                        # Architecture & Technical Documentation
+│   ├── architecture/            # ERD diagrams, OpenAPI specs, C4 diagrams
+│   └── compliance/              # Audit reports & performance evidence
+├── docker-compose.yml           # Multi-container orchestration (API, Redis, Worker)
+├── .env.example                 # Environment variables blueprint
+└── README.md                    # Primary repository documentation
+👥 Engineering Team & StakeholdersCore Development TeamNameRoleCore ResponsibilitiesContactAlfredo Benjamín Castro AlarcónBackend Lead & SecurityFastAPI Architecture, OAuth/JWT, Brevo API Gatewayalf.castro@duocuc.clCristopher Leonardo Hernández CalderónFrontend LeadReact 18/Vite SPA, Vercel Pipelines, Zustand, GIS UIcr.hernandezc@duocuc.clFelipe Calderón OlivaData Engine & Database LeadSupabase PostgreSQL, Async SQLAlchemy, Risk Algorithmsfel.calderono@duocuc.clMatías Enrique Tirado JeldesDevOps, QA & Async ServicesDocker Orchestration, Render/UptimeRobot, Pytest Suitema.tirado@duocuc.clAcademic Context & Institutional PartnersSponsor / Client: ClearBid NJ, LLC in technical collaboration with alloxentricInstitution: Duoc UC — School of Informatics and Telecommunications (Viña del Mar, Chile)Academic Program: Senior Capstone Project — Software Engineering Degree📑 Agile Roadmap & Sprint ExecutionCompleted MilestonesPhase / IterationKey DeliverablesArtifacts & EvidenceStatusPhase 1: Local FoundationPostgreSQL schema (clearbid_db - 25 tables), Argon2id hashing, initial Mercer County sample dataset.pgAdmin 4 queries, ER diagrams.✅ CompletedPhase 2: Cloud MigrationSupabase Cloud migration, data type normalization, live Mercer County auction data feed.Supabase ERD Visualizer.✅ CompletedPhase 3: 2FA & Security APIFastAPI Auth Endpoints, JWT token refresh, migration from legacy SMTP to Brevo HTTPS API.Operational 2FA pipeline, 15m expiration.✅ CompletedPhase 4: Distributed CloudVercel production SPA frontend deployment (HashRouter), Render backend deployment, UptimeRobot monitoring active.Live endpoints, zero cold starts.✅ Completed🚀 Getting Started & Local SetupSystem PrerequisitesPython: 3.12 or higherNode.js: v18.0.0 or higher (npm included)GitDocker Desktop (Optional, for containerized run)1. Backend Setup (FastAPI)# Clone repository
 git clone https://github.com/Alphareone/CapstoneProject.git
 cd CapstoneProject/backend
 
-# Crear entorno virtual estándar
+# Create virtual environment
 python -m venv venv
 
-# Activar el entorno virtual
-# En Windows:
+# Activate virtual environment
+# On Windows:
 venv\Scripts\activate
-# En macOS/Linux:
+# On macOS/Linux:
 source venv/bin/activate
 
-# Instalar dependencias
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Configurar variables de entorno (.env)
+# Configure environment secrets
 cp .env.example .env
-# (Completar con credenciales de Supabase y Brevo API Key)
+# (Fill in your Supabase DB URI and Brevo API Key)
 
-# Ejecutar el servidor local
+# Launch local API development server
 uvicorn app.main:app --reload --port 8000
-```
+Interactive API Docs (Swagger UI): http://localhost:8000/docsHealthcheck Verification: http://localhost:8000/healthcheck2. Frontend Setup (React 18 + Vite)cd ../frontend
 
-* **API Docs (Swagger UI):** `http://localhost:8000/docs`
-* **Healthcheck:** `http://localhost:8000/healthcheck`
-
-### 2. Configuración del Frontend (React 18 + Vite)
-
-```bash
-cd ../frontend
-
-# Instalar dependencias
+# Install node packages
 npm install
 
-# Configurar variables de entorno (.env)
-VITE_API_BASE_URL=http://localhost:8000
+# Configure environment variables
+echo "VITE_API_BASE_URL=http://localhost:8000" > .env.local
 
-# Iniciar servidor de desarrollo
+# Run Vite development server
 npm run dev
-```
-
-* **Aplicación Web Local:** `http://localhost:5173`
-
-### 3. Ejecución Alternativa con Docker Compose
-
-```bash
-cd ..
+Local Web Application: http://localhost:51733. Alternative: Launching via Docker Composecd ..
 docker compose up --build -d
-```
-
----
-
-## 🔐 Flujo de Autenticación 2FA (API Brevo) y REST API
-
-ClearBid NJ implementa un flujo de Doble Factor de Autenticación (2FA) resguardado vía HTTPS:
-
-```text
-[Registro / Login Usuario] ──► Hashing Argon2id / Generación OTP (6 dígitos)
-                                          │
-[Petición HTTPS POST] ────────► API Brevo (https://api.brevo.com/v3/smtp/email)
-                                          │
-[Entrega Garantizada] ────────► Correo Electrónico del Usuario (Validez 15 min)
-                                          │
-[Verificación en App] ────────► Validación de Token OTP y emisión de JWT de Sesión
-```
-
-### Endpoints Principales (`/api/v1/`)
-
-* `POST /api/v1/auth/register` — Registro de usuario con encriptación Argon2id.
-* `POST /api/v1/auth/login` — Validación de credenciales de primer factor y emisión de OTP.
-* `POST /api/v1/auth/2fa/verify` — Verificación de OTP (Brevo API) y emisión de JWT final.
-* `GET /api/v1/properties` — Catálogo de propiedades (Filtros por Condado, Semáforo de Riesgo, ROI).
-* `GET /api/v1/properties/{id}/risk` — Diagnóstico automatizado de riesgo y semaforización.
-
----
-
-## 🧪 Aseguramiento de Calidad (QA) y Pruebas Pytest
-
-Las pruebas automatizadas backend se ejecutan localmente o dentro del contenedor mediante `pytest`:
-
-```bash
-# Ejecución directa en backend
+🔐 Authentication & API ReferenceClearBid NJ features a multi-tiered Two-Factor Authentication (2FA) workflow to protect proprietary deal analysis:[User Login / Registration] ──► Argon2id Validation / 6-Digit OTP Generation
+                                             │
+[HTTPS Request POST] ────────► Brevo API (https://api.brevo.com/v3/smtp/email)
+                                             │
+[Guaranteed Delivery] ───────► User Inbox (Valid for 15 minutes)
+                                             │
+[Verification Endpoint] ─────► Validation of OTP Token ──► Issue Session JWT
+Core API Routes (/api/v1/)POST /api/v1/auth/register — Creates user account with Argon2id password encryption.POST /api/v1/auth/login — Validates primary credentials and initiates 2FA challenge.POST /api/v1/auth/2fa/verify — Validates Brevo API OTP token and issues session JWT.GET /api/v1/properties — Queries property catalog with filters (County, Risk Traffic-Light, Min ROI).GET /api/v1/properties/{id}/risk — Returns detailed risk scoring and rule-by-rule breakdown.🧪 Quality Assurance (QA) & Test AutomationThe backend test suite is executed using pytest and pytest-asyncio:# Execute tests directly inside backend environment
 pytest -v
 
-# O mediante Docker Compose
+# Or run via Docker Compose container
 docker compose exec api pytest -v
-```
-
-### Remediaciones y Auditoría
-* Cobertura de tests ajustada a los flujos reales de respuesta HTTP (`401 Unauthorized` para errores OTP, `201 Created` en registros nuevos).
-* Validación estricta del payload hacia la API de Brevo en los entornos de prueba.
-
----
-
-## 📊 Criterios de Aceptación (DoD) y KPIs
-
-### Criterio de Hecho (Definition of Done - DoD)
-
-1. Funcionalidades cubiertas con casos de prueba automatizados en Pytest.
-2. Código integrado a `main` vía Pull Request sin credenciales o claves expuestas.
-3. Despliegues continuos verificados operativamente en Vercel (Frontend) y Render (Backend).
-4. Pings de UptimeRobot configurados y activos para garantizar respuesta continua en Render.
-
-### Indicadores Clave de Rendimiento (KPIs)
-
-* **Disponibilidad del Backend:** >99.5% de uptime en Render mediante UptimeRobot.
-* **Entregabilidad OTP:** 100% de éxito en la entrega de correos 2FA vía Brevo API.
-* **Consistencia de Datos:** 100% de coincidencia entre Supabase, respuestas API y tarjetas React.
-
----
-
-## 📚 Fuentes de Datos y Referencias
-
-1. **Mercer County Sheriff's Office:** *Sheriff's Foreclosure Sales List and Guidelines*. Estándares públicos para subastas ejecutorias en Mercer County, NJ. [Mercer County Sheriff](https://www.mercercounty.org/government/sheriff-/informational/sheriff-s-foreclosure-sale)
-2. **Mercer County Clerk — RecordsNG:** *Public Records Search for Title and Mortgages*. Búsqueda de registros de títulos y gravámenes. [Mercer RecordsNG](https://records.mercercounty.org/RecordsNG_Search/)
-3. **Repositorios Oficiales del Proyecto:**
-   * Repositorio de Documentación y Capstone: [CapstoneProject](https://github.com/Alphareone/CapstoneProject.git)
-   * Repositorio de Pruebas: [Pruebas_Proyecto_ClearBidNJ](https://github.com/Alphareone/Pruebas_Proyecto_ClearBidNJ.git)
+QA Standards & Code CoverageStatus Code Standardization: Verification of strict REST responses (HTTP 401 Unauthorized for bad OTP challenges, HTTP 201 Created on registration).Payload Verification: Automated mocking and verification of Brevo HTTPS API outbound requests during unit testing.📊 Definition of Done (DoD) & Target KPIsDefinition of Done (DoD)A feature is marked as COMPLETE only when:All acceptance criteria are covered by automated unit/integration tests in Pytest.Code is merged into main via Pull Request with zero exposed secrets or API keys.Continuous deployment is verified live on Vercel (Frontend) and Render (Backend).UptimeRobot monitors are active, ensuring sub-second response times without cold starts.Target Key Performance Indicators (KPIs)Backend Uptime: > 99.5% uptime on Render backed by UptimeRobot pinging.2FA Email Deliverability: 100% successful inbox delivery rate via Brevo API.Data Fidelity: 100% parity between Supabase database records, FastAPI JSON payloads, and React UI components.📚 Data Sources & Legal DisclaimersMercer County Sheriff's Office: Sheriff's Foreclosure Sales List and Statutory Guidelines. Official legal foreclosure notices for Mercer County, NJ. Mercer County SheriffMercer County Clerk — RecordsNG: Public Search System for Mortgages, Deeds, and Liens. Public records search for superior encumbrances and title status. Mercer RecordsNGOfficial Repositories:Documentation & Capstone Artifacts: CapstoneProjectAutomated Test Suite & Codebase: Pruebas_Proyecto_ClearBidNJDisclaimer: ClearBid NJ is an analytical tool intended for informational and underwriting support. Users should perform independent title searches and consult licensed real estate attorneys before bidding at foreclosure sales.
