@@ -1,6 +1,6 @@
 # ClearBid NJ — SIPPRI (Intelligence System for Pre-Auction Properties and Real Estate Insights)
 
-🌐 **Language / Idioma:** [English](README.md) | [Español](README_ES.md)
+🌐 **Language / Idioma:** [English](README.md) | [Español](README_ESP.md)
 
 > **Capstone Project / APT** — Integrated platform for the evaluation, analysis, and risk diagnosis of judicial and real estate auctions in Mercer County, New Jersey.
 
