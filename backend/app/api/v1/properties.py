@@ -286,7 +286,7 @@ async def get_property(
         raise errors.not_found("Propiedad inexistente.")
     import json
 
-    photos = json.loads(p.photos) if p.photos else []
+    photos = json.loads(p.photos) if isinstance(p.photos, str) else (p.photos or [])
     if p.legal:
         legal_data = {column.name: getattr(p.legal, column.name) for column in p.legal.__table__.columns}
         try:
