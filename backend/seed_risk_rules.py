@@ -98,26 +98,33 @@ RULES = [
 async def main() -> None:
     async with AsyncSessionLocal() as db:
         try:
+            # HACEMOS UN SOLO SELECT AL PRINCIPIO PARA EVITAR EL BUG DE ASYNCPG
+            result = await db.execute(select(Rule))
+            existing_rules = {rule.code: rule for rule in result.scalars().all()}
+
             for data in RULES:
-                row = (await db.execute(
-                    select(Rule).where(Rule.code == data["code"])
-                )).scalar_one_or_none()
-                if row is None:
+                code = data["code"]
+                if code not in existing_rules:
                     row = Rule(**data, active=True)
                     db.add(row)
-                    print(f"CREADA: {data['code']}")
+                    print(f"CREADA: {code}")
                 else:
+                    row = existing_rules[code]
                     for key, value in data.items():
                         setattr(row, key, value)
                     row.active = True
-                    print(f"ACTUALIZADA: {data['code']}")
+                    print(f"ACTUALIZADA: {code}")
+            
             await db.flush()
+            
             evidence_count, evidence_missing = await apply_documentary_findings(db)
             properties = (await db.execute(
                 select(Property.id).where(Property.archived.is_(False))
             )).scalars().all()
+            
             for property_id in properties:
                 await recalculate_traffic_light(db, property_id)
+                
             await db.commit()
             print(f"OK: {len(RULES)} reglas; {len(properties)} propiedades recalculadas.")
             print(f"ANTECEDENTES: {evidence_count}/11 propiedades cargadas.")
