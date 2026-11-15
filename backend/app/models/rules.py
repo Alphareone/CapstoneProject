@@ -30,7 +30,8 @@ class TrafficLightResult(Base, TimestampMixin):
     property_id: Mapped[str] = mapped_column(
         ForeignKey("properties.id", ondelete="CASCADE"), primary_key=True
     )
-    flag: Mapped[str] = mapped_column(String(10), nullable=False)  # green|yellow|red
+    flag: Mapped[str | None] = mapped_column(String(10), nullable=True)  # green|yellow|red|None
+    evaluation_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     engine_version: Mapped[str] = mapped_column(String(10), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -47,7 +48,7 @@ class RuleResult(Base):
         ForeignKey("traffic_light_results.property_id", ondelete="CASCADE"), index=True
     )
     rule_code: Mapped[str] = mapped_column(String(60), nullable=False)
-    status: Mapped[str] = mapped_column(String(10), nullable=False)  # pass|fail
+    status: Mapped[str] = mapped_column(String(10), nullable=False)  # pass|fail|unknown
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     title: Mapped[str | None] = mapped_column(String(160), nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
