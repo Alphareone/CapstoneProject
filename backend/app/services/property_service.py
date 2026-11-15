@@ -33,7 +33,7 @@ async def recalculate_traffic_light(
         await db.execute(select(Rule).where(Rule.active.is_(True)))
     ).scalars().all()
 
-    flag, evaluated = traffic_light.evaluate(prop, rules)
+    flag, evaluated, evaluation_status = traffic_light.evaluate(prop, rules)
     generated_at = traffic_light.now_tz()
 
     # Upsert del resultado agregado
@@ -42,6 +42,7 @@ async def recalculate_traffic_light(
         result = TrafficLightResult(property_id=property_id)
         db.add(result)
     result.flag = flag
+    result.evaluation_status = evaluation_status
     result.engine_version = traffic_light.ENGINE_VERSION
     result.generated_at = generated_at
 
