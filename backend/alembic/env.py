@@ -31,12 +31,13 @@ def do_run_migrations(connection) -> None:
 
 async def run_async_migrations() -> None:
     # CREACIÓN DIRECTA DEL ENGINE:
-    # Ignoramos el config de Alembic para la URL y usamos la variable limpia.
-    # Esto evita el cuelgue por caracteres especiales como el % en tu contraseña.
     connectable = create_async_engine(
         settings.DATABASE_URL,
         poolclass=pool.NullPool,
-        connect_args={"prepared_statement_cache_size": 0},
+        connect_args={
+            "prepared_statement_cache_size": 0,
+            "statement_cache_size": 0
+        },
     )
     
     async with connectable.connect() as connection:
