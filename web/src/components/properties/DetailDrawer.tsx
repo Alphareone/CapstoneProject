@@ -137,11 +137,14 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
     )
     .join("");
 
+  // Usamos el tag <title> para que al guardar el PDF tome el nombre de la propiedad automáticamente
+  const titleName = `ClearBid_Report_${p.address.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>ClearBid NJ — Auction Due Diligence Report (${p.address})</title>
+  <title>${titleName}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111827; margin: 32px; line-height: 1.5; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111827; padding-bottom: 16px; margin-bottom: 24px; }
@@ -156,7 +159,7 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
     @media print { .no-print { display: none; } body { margin: 16px; } }
   </style>
 </head>
-<body>
+<body onload="window.print()">
   <div class="header">
     <div>
       <div style="font-size:12px;font-weight:700;color:#4f46e5;">CLEARBID NJ · AUCTION DUE DILIGENCE REPORT</div>
@@ -234,16 +237,16 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
 </body>
 </html>`;
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const slug = p.address.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  a.href = url;
-  a.download = `ClearBid-Report-${slug}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Abrimos una nueva pestaña y escribimos el reporte. 
+  // El atributo onload="window.print()" disparará automáticamente la creación del PDF.
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  } else {
+    alert("Por favor, permite las ventanas emergentes (pop-ups) para generar el PDF.");
+  }
 }
 
 export default function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
@@ -268,7 +271,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   function handleDownloadReport() {
     if (!p || !ai) return;
     downloadPropertyReport(p, ai);
-    toast("Informe descargado correctamente");
+    toast("Generando PDF...");
   }
 
   const KV = ({ k, v, color }: { k: string; v: string; color?: string }) => (
