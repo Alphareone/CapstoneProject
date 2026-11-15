@@ -3,7 +3,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import pool
 
 from app.core.config import settings
@@ -11,8 +11,8 @@ from app.db.base import Base
 import app.models  # noqa: F401  (registra todos los modelos en Base.metadata)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
+# Configuramos los logs
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -30,11 +30,14 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    # CREACIÓN DIRECTA DEL ENGINE:
+    # Ignoramos el config de Alembic para la URL y usamos la variable limpia.
+    # Esto evita el cuelgue por caracteres especiales como el % en tu contraseña.
+    connectable = create_async_engine(
+        settings.DATABASE_URL,
         poolclass=pool.NullPool,
     )
+    
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
