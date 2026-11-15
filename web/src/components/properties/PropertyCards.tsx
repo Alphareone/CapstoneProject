@@ -36,7 +36,7 @@ export default function PropertyCards({
             />
             {t("gallery")}
             <span className="absolute right-[9px] top-[9px] rounded-2xl bg-paper px-[9px] py-[3px] shadow">
-              <FlagPill flag={p.flag} />
+              <FlagPill flag={p.flag} provisionalFlag={p.documentary_flag} />
             </span>
           </div>
           <div className="p-[11px_13px]">

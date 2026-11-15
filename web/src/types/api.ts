@@ -86,20 +86,25 @@ export interface PropertyListItem {
   county_id: string;
   property_type: PropertyType | null;
   flag: Flag | null;
+  documentary_flag?: Flag | null;
   opening_price: number | null;
   estimated_value: number | null;
+  estimated_roi: number | null;
   auction_date: string | null;
   thumbnail_url: string | null;
 }
+
 export interface FinancialBlock {
   opening_price: number | null;
   total_liens: number | null;
+  total_liens_verified?: boolean | null;
   arv: number | null;
   estimated_repairs: number | null;
   suggested_max_bid: number | null;
   potential_profit: number | null;
   estimated_roi: number | null;
 }
+
 export interface LegalBlock {
   auction_type: AuctionType | null;
   auction_date: string | null;
@@ -110,7 +115,27 @@ export interface LegalBlock {
   required_deposit: number | null;
   surviving_irs_lien?: number | null;
   senior_liens?: number | null;
+  bankruptcy_indicator?: boolean | null;
+  open_permits_count?: number | null;
+  defendant_count?: number | null;
+  ownership_type?: string | null;
+  mortgage_active?: boolean | null;
+  documentary_flag?: Flag | null;
+  documentary_status?: string | null;
+  documentary_summary?: string | null;
+  documentary_evidence?: {
+    type: string;
+    title: string;
+    source: string;
+    reference?: string | null;
+    date?: string | null;
+    reported_amount?: number | null;
+    currency?: string | null;
+    note?: string | null;
+  }[];
+  documentary_updated_at?: string | null;
 }
+
 export interface PhysicalBlock {
   sqft: number | null;
   lot_sqft: number | null;
@@ -124,19 +149,23 @@ export interface PhysicalBlock {
   lat: number | null;
   lng: number | null;
 }
+
 export interface RuleResult {
   code: string;
-  status: "pass" | "fail";
+  status: "pass" | "fail" | "unknown";
   severity: Severity;
   title: string | null;
   message: string | null;
 }
+
 export interface TrafficLight {
-  flag: Flag;
+  flag: Flag | null;
+  evaluation_status: "complete" | "incomplete" | "not_configured";
   engine_version: string;
   generated_at: string;
   rules: RuleResult[];
 }
+
 export interface PropertyDetail {
   id: string;
   address: string;
@@ -194,10 +223,12 @@ export interface Alert {
   read: boolean;
   created_at: string;
 }
+
 export interface AlertList {
   items: Alert[];
   unread_count: number;
 }
+
 export interface AlertSettings {
   new_property: boolean;
   price_drop: boolean;
@@ -230,6 +261,7 @@ export interface ExportJob {
   row_count?: number | null;
   download_url?: string | null;
   expires_at?: string | null;
+  error_message?: string | null;
 }
 
 // --- Error estándar ---

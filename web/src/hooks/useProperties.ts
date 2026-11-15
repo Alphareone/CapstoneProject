@@ -76,6 +76,7 @@ export function useFacets(f: PropertyQuery) {
 export interface MapFeature {
   id: string;
   flag: string | null;
+  provisional: boolean;
   opening_price: number | null;
   lat: number;
   lng: number;
@@ -91,10 +92,11 @@ export function usePropertyMap(flag: string[], countyId: string[]) {
       const { data } = await api.get(`/api/v1/properties/map?${p.toString()}`);
       return (data.features ?? []).map((ft: {
         geometry: { coordinates: [number, number] };
-        properties: { id: string; flag: string | null; opening_price: number | null };
+        properties: { id: string; flag: string | null; provisional?: boolean; opening_price: number | null };
       }) => ({
         id: ft.properties.id,
         flag: ft.properties.flag,
+        provisional: Boolean(ft.properties.provisional),
         opening_price: ft.properties.opening_price,
         lng: ft.geometry.coordinates[0],
         lat: ft.geometry.coordinates[1],
