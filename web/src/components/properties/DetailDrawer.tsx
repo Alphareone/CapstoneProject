@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import FlagPill from "@/components/ui/FlagPill";
@@ -35,20 +35,18 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
   const roi = p.financial.estimated_roi ?? 0;
   const liens = p.financial.total_liens ?? 0;
 
-  // 1. Análisis financiero (spread y ROI)
   const netMargin = arv - opening - repairs - (p.financial.total_liens_verified ? liens : 0);
-  if (roi >= 0.25) {
+  if (roi >= 25) {
     score += 14;
-    reasons.push(`Retorno proyectado atractivo (${(roi * 100).toFixed(1)}% ROI neto estimado).`);
-  } else if (roi >= 0.15) {
+    reasons.push(`Retorno proyectado atractivo (${roi.toFixed(1)}% ROI neto estimado).`);
+  } else if (roi >= 15) {
     score += 6;
-    reasons.push(`Margen financiero moderado (${(roi * 100).toFixed(1)}% ROI estimado).`);
+    reasons.push(`Margen financiero moderado (${roi.toFixed(1)}% ROI estimado).`);
   } else {
     score -= 10;
     reasons.push("Margen estrecho entre precio de apertura, reparaciones y ARV.");
   }
 
-  // 2. Impacto del semáforo de riesgo legal
   if (p.flag === "green") {
     score += 18;
     reasons.push("Sin alertas legales críticas ni gravámenes sobrevivientes detectados.");
@@ -63,7 +61,6 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
     reasons.push("Evaluación legal incompleta; se recomienda verificar registro de título.");
   }
 
-  // 3. Ocupación y condición física
   if (p.legal.occupancy === "vacant") {
     score += 5;
     reasons.push("Propiedad desocupada: reduce costos y tiempos de toma de posesión.");
@@ -81,12 +78,10 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
 
   score = Math.max(8, Math.min(96, Math.round(score)));
 
-  // Fórmula conservadora de puja máxima IA (70% regla ARV ajustada por riesgo)
   const riskFactor = p.flag === "green" ? 0.72 : p.flag === "yellow" ? 0.65 : 0.55;
   const rawMaxBid = Math.max(opening, Math.round((arv * riskFactor - repairs) / 500) * 500);
   const aiMaxBid = arv > 0 ? Math.min(rawMaxBid, Math.max(opening, arv - repairs - 15000)) : opening;
 
-  // Confianza según completitud de datos
   const knownFields = [
     p.financial.arv,
     p.financial.opening_price,
@@ -137,7 +132,6 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
     )
     .join("");
 
-  // Usamos el tag <title> para que al guardar el PDF tome el nombre de la propiedad automáticamente
   const titleName = `ClearBid_Report_${p.address.replace(/[^a-zA-Z0-9]/g, "_")}`;
 
   const html = `<!doctype html>
@@ -237,15 +231,13 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
 </body>
 </html>`;
 
-  // Abrimos una nueva pestaña y escribimos el reporte. 
-  // El atributo onload="window.print()" disparará automáticamente la creación del PDF.
-  const printWindow = window.open('', '_blank');
+  const printWindow = window.open("", "_blank");
   if (printWindow) {
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
   } else {
-    alert("Por favor, permite las ventanas emergentes (pop-ups) para generar el PDF.");
+    alert("Permite las ventanas emergentes para generar el PDF.");
   }
 }
 
@@ -257,10 +249,42 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   const { ids } = useSavedIds();
   const toggleSaved = useToggleSaved();
 
+  const [ai, setAi] = useState<AiPrediction | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
   const open = !!id;
   const isSaved = id ? ids.has(id) : false;
 
-  const ai = useMemo(() => (p ? computeAiPrediction(p) : null), [p]);
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAiAnalysis() {
+      if (!p) return;
+      setIsAiLoading(true);
+      try {
+        const rawBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        const baseUrl = rawBase.replace(/\/api\/v1\/?$/, "");
+        const res = await fetch(`${baseUrl}/api/v1/properties/ai-advisor`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ property_data: p }),
+        });
+
+        if (!res.ok) throw new Error(`Error en API de Gemini: ${res.status}`);
+
+        const data = await res.json();
+        if (isMounted) setAi(data);
+      } catch (err) {
+        console.warn("API de Gemini falló o no configurada. Activando IA de respaldo...", err);
+        if (isMounted) setAi(computeAiPrediction(p));
+      } finally {
+        if (isMounted) setIsAiLoading(false);
+      }
+    }
+    fetchAiAnalysis();
+    return () => {
+      isMounted = false;
+    };
+  }, [p]);
 
   async function save() {
     if (!id) return;
@@ -269,7 +293,11 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   }
 
   function handleDownloadReport() {
-    if (!p || !ai) return;
+    if (!p) return;
+    if (!ai) {
+      toast("Espere un segundo, la IA está analizando los datos...");
+      return;
+    }
     downloadPropertyReport(p, ai);
     toast("Generando PDF...");
   }
@@ -303,7 +331,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {isLoading || !p || !ai ? (
+        {isLoading || !p ? (
           <Spinner label={t("loading")} />
         ) : (
           <>
@@ -353,47 +381,52 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                     </div>
                   </div>
 
-                  {/* Prototipo AI Deal Advisor */}
-                  <div className="mb-3 rounded-xl border border-line2 bg-wash p-3.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
-                        ✦ ClearBid AI Predictor
-                      </span>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
-                        style={{ backgroundColor: ai.verdictColor }}
-                      >
-                        {ai.verdict}
-                      </span>
+                  {isAiLoading ? (
+                    <div className="mb-3 flex flex-col items-center justify-center rounded-xl border border-line2 bg-wash p-6">
+                      <Spinner label="Gemini AI is analyzing property..." />
                     </div>
-
-                    <div className="mt-2.5 flex items-baseline justify-between">
-                      <div>
-                        <div className="text-2xl font-extrabold text-ink">
-                          {ai.score}
-                          <span className="text-sm font-normal text-ink2">/100</span>
+                  ) : ai ? (
+                    <div className="mb-3 rounded-xl border border-line2 bg-wash p-3.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
+                          ✦ ClearBid AI Predictor
+                        </span>
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+                          style={{ backgroundColor: ai.verdictColor }}
+                        >
+                          {ai.verdict}
+                        </span>
+                      </div>
+                      <div className="mt-2.5 flex items-baseline justify-between">
+                        <div>
+                          <div className="text-2xl font-extrabold text-ink">
+                            {ai.score}
+                            <span className="text-sm font-normal text-ink2">/100</span>
+                          </div>
+                          <div className="text-[11px] text-ink2">Viability Score · {ai.confidence}% conf.</div>
                         </div>
-                        <div className="text-[11px] text-ink2">Viability Score · {ai.confidence}% conf.</div>
+                        <div className="text-right">
+                          <div className="text-sm font-bold text-ink">{money(ai.aiMaxBid)}</div>
+                          <div className="text-[11px] text-ink2">AI Optimal Max Bid</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-ink">{money(ai.aiMaxBid)}</div>
-                        <div className="text-[11px] text-ink2">AI Optimal Max Bid</div>
-                      </div>
+                      <ul className="mt-2.5 space-y-1 border-t border-line2 pt-2 text-[12px] text-ink2">
+                        {ai.reasons.map((reason, idx) => (
+                          <li key={idx}>• {reason}</li>
+                        ))}
+                      </ul>
                     </div>
-
-                    <ul className="mt-2.5 space-y-1 border-t border-line2 pt-2 text-[12px] text-ink2">
-                      {ai.reasons.map((reason, idx) => (
-                        <li key={idx}>• {reason}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  ) : null}
 
                   <KV k={t("fin_opening")} v={money(p.financial.opening_price)} />
                   <KV
                     k={t("fin_liens")}
-                    v={p.financial.total_liens_verified === true
-                      ? money(p.financial.total_liens)
-                      : `${money(p.financial.total_liens)} · ${t("not_verified")}`}
+                    v={
+                      p.financial.total_liens_verified === true
+                        ? money(p.financial.total_liens)
+                        : `${money(p.financial.total_liens)} · ${t("not_verified")}`
+                    }
                   />
                   <KV k={t("fin_arv")} v={money(p.financial.arv)} />
                   <KV k={t("fin_repairs")} v={money(p.financial.estimated_repairs)} />
@@ -416,11 +449,43 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                   <KV k={t("leg_deposit")} v={money(p.legal.required_deposit)} />
                   <KV k={t("leg_irs_lien")} v={money(p.legal.surviving_irs_lien)} />
                   <KV k={t("leg_senior_liens")} v={money(p.legal.senior_liens)} />
-                  <KV k={t("leg_bankruptcy")} v={p.legal.bankruptcy_indicator === null || p.legal.bankruptcy_indicator === undefined ? "—" : p.legal.bankruptcy_indicator ? t("yes") : t("no")} />
-                  <KV k={t("leg_open_permits")} v={p.legal.open_permits_count === null || p.legal.open_permits_count === undefined ? "—" : String(p.legal.open_permits_count)} />
-                  <KV k={t("leg_defendants")} v={p.legal.defendant_count === null || p.legal.defendant_count === undefined ? "—" : String(p.legal.defendant_count)} />
+                  <KV
+                    k={t("leg_bankruptcy")}
+                    v={
+                      p.legal.bankruptcy_indicator === null || p.legal.bankruptcy_indicator === undefined
+                        ? "—"
+                        : p.legal.bankruptcy_indicator
+                          ? t("yes")
+                          : t("no")
+                    }
+                  />
+                  <KV
+                    k={t("leg_open_permits")}
+                    v={
+                      p.legal.open_permits_count === null || p.legal.open_permits_count === undefined
+                        ? "—"
+                        : String(p.legal.open_permits_count)
+                    }
+                  />
+                  <KV
+                    k={t("leg_defendants")}
+                    v={
+                      p.legal.defendant_count === null || p.legal.defendant_count === undefined
+                        ? "—"
+                        : String(p.legal.defendant_count)
+                    }
+                  />
                   <KV k={t("leg_ownership")} v={p.legal.ownership_type ?? "—"} />
-                  <KV k={t("leg_mortgage")} v={p.legal.mortgage_active === null || p.legal.mortgage_active === undefined ? "—" : p.legal.mortgage_active ? t("yes") : t("no")} />
+                  <KV
+                    k={t("leg_mortgage")}
+                    v={
+                      p.legal.mortgage_active === null || p.legal.mortgage_active === undefined
+                        ? "—"
+                        : p.legal.mortgage_active
+                          ? t("yes")
+                          : t("no")
+                    }
+                  />
                   {p.legal.documentary_status && (
                     <section className="mt-4 rounded-xl border border-line2 p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -437,15 +502,23 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                       {(p.legal.documentary_evidence ?? []).map((item, index) => (
                         <div key={`${item.reference ?? item.title}-${index}`} className="border-t border-line2 py-2 text-[12px]">
                           <b>{item.title}</b>
-                          <div className="text-ink2">{item.source}{item.reference ? ` · ${item.reference}` : ""}{item.date ? ` · ${item.date}` : ""}</div>
+                          <div className="text-ink2">
+                            {item.source}
+                            {item.reference ? ` · ${item.reference}` : ""}
+                            {item.date ? ` · ${item.date}` : ""}
+                          </div>
                           {item.reported_amount !== null && item.reported_amount !== undefined && (
-                            <div className="font-semibold">{money(item.reported_amount)} {item.currency ?? ""}</div>
+                            <div className="font-semibold">
+                              {money(item.reported_amount)} {item.currency ?? ""}
+                            </div>
                           )}
                           {item.note && <p className="mt-1 text-ink2">{item.note}</p>}
                         </div>
                       ))}
                       {p.legal.documentary_updated_at && (
-                        <div className="mt-2 text-[10px] text-ink2">{t("documentary_updated")}: {fdate(p.legal.documentary_updated_at)}</div>
+                        <div className="mt-2 text-[10px] text-ink2">
+                          {t("documentary_updated")}: {fdate(p.legal.documentary_updated_at)}
+                        </div>
                       )}
                     </section>
                   )}
@@ -543,16 +616,16 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
 function flagBg(flag: string | null): string {
   const s = flagShort(flag);
-  return s === "g" ? "risk-green-bg"
-    : s === "a" ? "risk-amber-bg"
-    : s === "r" ? "risk-red-bg"
-    : "risk-pending-bg";
+  return s === "g"
+    ? "risk-green-bg"
+    : s === "a"
+      ? "risk-amber-bg"
+      : s === "r"
+        ? "risk-red-bg"
+        : "risk-pending-bg";
 }
 
 function flagAccent(flag: string | null): string {
   const s = flagShort(flag);
-  return s === "g" ? "#15803D"
-    : s === "a" ? "#B45309"
-    : s === "r" ? "#B91C1C"
-    : "#374151";
+  return s === "g" ? "#15803D" : s === "a" ? "#B45309" : s === "r" ? "#B91C1C" : "#374151";
 }
