@@ -4,26 +4,40 @@ import FlagPill from "@/components/ui/FlagPill";
 import { money, roiClass, roiText, TYPE_LBL } from "@/lib/format";
 import type { PropertyListItem } from "@/types/api";
 
-const FALLBACK_PHOTOS = [
+// 24 fachadas residenciales estilo suburbano Noreste / New Jersey (sin repeticiones en 20 items)
+const NJ_RESIDENTIAL_PHOTOS = [
   "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1605276374104-dee2a0ed3cd6?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1576941089067-2de3c901e126?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1598228723793-52759bba239c?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1600573472550-8090b5e0745e?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1513584684374-8bab748fbf90?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1602941525421-8f8b81d3edbb?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1558036117-15d82a90b9b1?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1592595896616-c37162298647?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1572120360610-d971b9d7767c?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1599427303058-f04cbcf4756f?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80",
 ];
 
-function cardPhoto(p: PropertyListItem): string {
-  if (p.thumbnail_url && p.thumbnail_url.startsWith("http")) return p.thumbnail_url;
-  let hash = 0;
-  for (let i = 0; i < p.id.length; i++) {
-    hash = (hash * 31 + p.id.charCodeAt(i)) >>> 0;
+function cardPhoto(p: PropertyListItem, index: number): string {
+  // Si el backend trajo una foto real personalizada (no del pool genérico), úsala
+  if (p.thumbnail_url && p.thumbnail_url.startsWith("http") && !p.thumbnail_url.includes("unsplash.com")) {
+    return p.thumbnail_url;
   }
-  return FALLBACK_PHOTOS[hash % FALLBACK_PHOTOS.length];
+  return NJ_RESIDENTIAL_PHOTOS[index % NJ_RESIDENTIAL_PHOTOS.length];
 }
 
 export default function PropertyCards({
@@ -40,7 +54,7 @@ export default function PropertyCards({
   const { t } = useTranslation();
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-[14px]">
-      {items.map((p) => (
+      {items.map((p, index) => (
         <div
           key={p.id}
           onClick={() => onOpen(p.id)}
@@ -50,7 +64,7 @@ export default function PropertyCards({
         >
           <div className="relative h-[136px] w-full overflow-hidden bg-wash">
             <img
-              src={cardPhoto(p)}
+              src={cardPhoto(p, index)}
               alt={p.address}
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
