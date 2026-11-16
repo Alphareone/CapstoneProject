@@ -358,8 +358,13 @@ async def get_ai_advisor(payload: AIPredictionRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="Falta GROQ_API_KEY en Render")
 
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
     prompt = f"""Eres ClearBid AI, un asesor experto en inversiones inmobiliarias y subastas (foreclosures) en New Jersey.
-Analiza los siguientes datos de una propiedad (ARV, precio base, reparaciones, ocupación, alertas legales del semáforo) y devuelve estrictamente un JSON válido con esta estructura exacta:
+Analiza los siguientes datos de una propiedad (ARV, precio base, reparaciones, ocupación, alertas legales del semáforo, documentary_flag) y devuelve estrictamente un JSON válido con esta estructura exacta:
 {{
     "score": <numero entero entre 0 y 100 indicando viabilidad de inversión>,
     "verdict": "<'STRONG BUY' si es muy buena, 'MODERATE / CAUTION' si hay dudas, 'HIGH RISK / AVOID' si es peligrosa>",
@@ -374,21 +379,41 @@ Datos de la propiedad:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
+            models_res = await client.get(
+                "https://api.groq.com/openai/v1/models",
+                headers=headers,
+            )
+            if models_res.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Groq models error: {models_res.text}")
+
+            available = [
+                m["id"]
+                for m in models_res.json().get("data", [])
+                if not any(bad in m["id"].lower() for bad in ("whisper", "guard", "tts", "embed"))
+            ]
+            if not available:
+                raise HTTPException(status_code=500, detail="No hay modelos de texto activos en Groq")
+
+            preferred = [
+                "llama-3.1-8b-instant",
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
+                "qwen/qwen3-32b",
+            ]
+            selected_model = next((m for m in preferred if m in available), available[0])
+
             res = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": selected_model,
                     "messages": [{"role": "user", "content": prompt}],
                     "response_format": {"type": "json_object"},
                     "temperature": 0.2,
                 },
             )
             if res.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Groq error: {res.text}")
+                raise HTTPException(status_code=500, detail=f"Groq error ({selected_model}): {res.text}")
 
             content = res.json()["choices"][0]["message"]["content"]
             return json.loads(content)
