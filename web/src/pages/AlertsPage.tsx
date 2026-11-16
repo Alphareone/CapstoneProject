@@ -16,7 +16,7 @@ export default function AlertsPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Traemos el docket completo y filtramos las propiedades con semáforo rojo (oficial o documental)
+  // page_size: 50 es el máximo permitido por PageParams en FastAPI
   const { data: allProps, isLoading: loadingProps } = useProperties({
     flag: [],
     county_id: [],
@@ -26,7 +26,7 @@ export default function AlertsPage() {
     q: "",
     sort: "",
     page: 1,
-    page_size: 100,
+    page_size: 50,
   });
 
   if (isLoading || loadingProps) return <Spinner label={t("loading")} />;
