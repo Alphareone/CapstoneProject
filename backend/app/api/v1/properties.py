@@ -42,6 +42,31 @@ from app.services import query as q
 router = APIRouter(prefix="/properties", tags=["Propiedades"])
 
 
+def _derive_financials(p: Property) -> tuple[float | None, int | None, int | None]:
+    """Deriva on-read ROI (%), ganancia neta y max bid según ClearBid Spread Ledger & RH-01."""
+    fin = p.financial
+    if not fin:
+        return None, None, None
+
+    opening = fin.opening_price or 0
+    arv = fin.arv or 0
+    if opening <= 0 or arv <= 0:
+        return fin.estimated_roi, fin.potential_profit, fin.suggested_max_bid
+
+    # Si no hay reparaciones cargadas, aplica modelo RH-01: (sqft * $125) * 1.15
+    sqft = p.physical.sqft if (p.physical and p.physical.sqft) else 1100
+    repairs = fin.estimated_repairs if fin.estimated_repairs is not None else round((sqft * 125) * 1.15)
+    liens = (fin.total_liens or 0) if fin.total_liens_verified else 0
+
+    total_cost = opening + repairs + liens
+    net_profit = round(arv - total_cost)
+    real_roi = round((net_profit / total_cost) * 100, 1) if total_cost > 0 else 0.0
+
+    # Puja máxima sugerida (regla del 70% ARV menos reparaciones y gravámenes)
+    max_bid = max(opening, round((arv * 0.70 - repairs - liens) / 500) * 500)
+    return real_roi, net_profit, max_bid
+
+
 @router.get(
     "",
     response_model=Page[PropertyListItem],
@@ -67,31 +92,38 @@ async def list_properties(
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    joined_fin = sort in {"opening_asc", "opening_desc", "roi_desc"} or (
-        min_opening is not None or max_opening is not None or min_roi is not None
+    joined_fin = sort in {"opening_asc", "opening_desc"} or (
+        min_opening is not None or max_opening is not None
     )
     joined_legal = sort == "auction_date" or bool(auction_type) or auction_from or auction_to
 
     base = q.apply_filters(
         select(Property).options(
-            selectinload(Property.financial), selectinload(Property.legal)
+            selectinload(Property.financial),
+            selectinload(Property.legal),
+            selectinload(Property.physical),
         ),
         county_id=[county_id] if county_id else None,
         zip=zip, flag=flag, auction_type=auction_type, property_type=property_type,
-        min_opening=min_opening, max_opening=max_opening, min_roi=min_roi,
+        min_opening=min_opening, max_opening=max_opening, min_roi=None,
         auction_from=auction_from, auction_to=auction_to, q=q_text,
         needs_financial=joined_fin, needs_legal=joined_legal,
     )
-    count_stmt = q.apply_filters(
-        select(func.count(distinct(Property.id))),
-        county_id=[county_id] if county_id else None,
-        zip=zip, flag=flag, auction_type=auction_type, property_type=property_type,
-        min_opening=min_opening, max_opening=max_opening, min_roi=min_roi,
-        auction_from=auction_from, auction_to=auction_to, q=q_text,
-    )
-    total = (await db.execute(count_stmt)).scalar_one()
-    stmt = q.apply_sort(base, sort, joined_fin).offset(page.offset).limit(page.limit)
-    rows = (await db.execute(stmt)).scalars().unique().all()
+    stmt = q.apply_sort(base, sort if sort != "roi_desc" else None, joined_fin)
+    all_rows = (await db.execute(stmt)).scalars().unique().all()
+
+    enriched = []
+    for p in all_rows:
+        real_roi, _, _ = _derive_financials(p)
+        if min_roi is not None and (real_roi is None or real_roi < min_roi):
+            continue
+        enriched.append((p, real_roi))
+
+    if sort == "roi_desc":
+        enriched.sort(key=lambda x: x[1] if x[1] is not None else -9999, reverse=True)
+
+    total = len(enriched)
+    sliced = enriched[page.offset : page.offset + page.limit]
 
     items = [
         PropertyListItem(
@@ -100,11 +132,11 @@ async def list_properties(
             documentary_flag=p.legal.documentary_flag if p.legal else None,
             opening_price=p.financial.opening_price if p.financial else None,
             estimated_value=p.financial.arv if p.financial else None,
-            estimated_roi=p.financial.estimated_roi if p.financial else None,
+            estimated_roi=real_roi,
             auction_date=p.legal.auction_date if p.legal else None,
             thumbnail_url=p.thumbnail_url,
         )
-        for p in rows
+        for p, real_roi in sliced
     ]
     return Page.create(items, total, page)
 
@@ -129,51 +161,67 @@ async def facets(
     kw = dict(
         county_id=[county_id] if county_id else None, flag=flag,
         auction_type=auction_type, property_type=property_type,
-        min_opening=min_opening, max_opening=max_opening, min_roi=min_roi, q=q_text,
+        min_opening=min_opening, max_opening=max_opening, min_roi=None, q=q_text,
     )
     ids_stmt = q.apply_filters(select(Property.id), **kw)
     ids = [r[0] for r in (await db.execute(ids_stmt)).all()]
-    total = len(ids)
-
     if not ids:
+        return FacetsResponse(total=0)
+
+    props = (
+        await db.execute(
+            select(Property)
+            .options(
+                selectinload(Property.financial),
+                selectinload(Property.legal),
+                selectinload(Property.physical),
+            )
+            .where(Property.id.in_(ids))
+        )
+    ).scalars().unique().all()
+
+    roi_vals = []
+    valid_ids = []
+    for p in props:
+        r_roi, _, _ = _derive_financials(p)
+        if r_roi is not None:
+            roi_vals.append(r_roi)
+        if min_roi is None or (r_roi is not None and r_roi >= min_roi):
+            valid_ids.append(p.id)
+
+    total = len(valid_ids)
+    if not valid_ids:
         return FacetsResponse(total=0)
 
     flag_rows = (
         await db.execute(
             select(func.coalesce(Property.flag, PropertyLegal.documentary_flag), func.count())
             .outerjoin(PropertyLegal, PropertyLegal.property_id == Property.id)
-            .where(Property.id.in_(ids))
+            .where(Property.id.in_(valid_ids))
             .group_by(func.coalesce(Property.flag, PropertyLegal.documentary_flag))
         )
     ).all()
     ptype_rows = (
         await db.execute(
             select(Property.property_type, func.count())
-            .where(Property.id.in_(ids)).group_by(Property.property_type)
+            .where(Property.id.in_(valid_ids)).group_by(Property.property_type)
         )
     ).all()
     county_rows = (
         await db.execute(
             select(County.id, County.name, func.count())
             .join(Property, Property.county_id == County.id)
-            .where(Property.id.in_(ids)).group_by(County.id, County.name)
+            .where(Property.id.in_(valid_ids)).group_by(County.id, County.name)
         )
     ).all()
     at_rows = (
         await db.execute(
             select(PropertyLegal.auction_type, func.count())
-            .where(PropertyLegal.property_id.in_(ids))
+            .where(PropertyLegal.property_id.in_(valid_ids))
             .group_by(PropertyLegal.auction_type)
         )
     ).all()
-    roi_vals = [
-        r[0] for r in (
-            await db.execute(
-                select(PropertyFinancial.estimated_roi)
-                .where(PropertyFinancial.property_id.in_(ids))
-            )
-        ).all() if r[0] is not None
-    ]
+
     buckets = [
         {"gte": t, "count": sum(1 for v in roi_vals if v >= t)} for t in (35, 30, 20)
     ]
@@ -300,11 +348,20 @@ async def get_property(
         legal_block = LegalBlock.model_validate(legal_data)
     else:
         legal_block = LegalBlock()
+
+    fin_block = FinancialBlock.model_validate(p.financial, from_attributes=True) if p.financial else FinancialBlock()
+    real_roi, net_profit, max_bid = _derive_financials(p)
+    if real_roi is not None:
+        fin_block.estimated_roi = real_roi
+    if net_profit is not None:
+        fin_block.potential_profit = net_profit
+    if max_bid is not None:
+        fin_block.suggested_max_bid = max_bid
+
     return PropertyDetail(
         id=p.id, address=p.address, city=p.city, zip=p.zip, county_id=p.county_id,
         property_type=p.property_type, flag=p.flag, photos=photos,
-        financial=FinancialBlock.model_validate(p.financial, from_attributes=True)
-        if p.financial else FinancialBlock(),
+        financial=fin_block,
         legal=legal_block,
         physical=PhysicalBlock.model_validate(p.physical, from_attributes=True)
         if p.physical else PhysicalBlock(),
@@ -363,15 +420,15 @@ async def get_ai_advisor(payload: AIPredictionRequest):
         "Content-Type": "application/json",
     }
 
-    prompt = f"""Eres ClearBid AI, un asesor experto en inversiones inmobiliarias y subastas (foreclosures) en New Jersey.
-Analiza los siguientes datos de una propiedad (ARV, precio base, reparaciones, ocupación, alertas legales del semáforo, documentary_flag) y devuelve estrictamente un JSON válido con esta estructura exacta:
+    prompt = f"""Eres ClearBid AI, motor de inteligencia de registros públicos para subastas judiciales (Sheriff Sales) en Mercer County, New Jersey (N.J.S.A. 2A:50-64).
+Analiza los datos reales de la propiedad (ARV, opening_price, estimated_repairs, estimated_roi, ocupación, flag, documentary_flag y traffic_light) y devuelve estrictamente un JSON válido con esta estructura exacta:
 {{
-    "score": <numero entero entre 0 y 100 indicando viabilidad de inversión>,
-    "verdict": "<'STRONG BUY' si es muy buena, 'MODERATE / CAUTION' si hay dudas, 'HIGH RISK / AVOID' si es peligrosa>",
+    "score": <numero entero entre 0 y 100 indicando viabilidad de due diligence>,
+    "verdict": "<'STRONG BUY' si flag es green y ROI neto > 25%, 'MODERATE / CAUTION' si hay alertas provisionales o margen ajustado, 'HIGH RISK / AVOID' si flag o documentary_flag es red o hay gravámenes críticos>",
     "verdictColor": "<'#16A34A' para STRONG BUY, '#D97706' para MODERATE, '#DC2626' para HIGH RISK>",
-    "aiMaxBid": <numero entero con la puja máxima matemática recomendada descontando reparaciones y riesgo>,
-    "confidence": <numero entero entre 0 y 100 de tu nivel de confianza en el análisis>,
-    "reasons": [<arreglo con exactamente 3 strings cortos en español, máximo 14 palabras cada uno, justificando tu decisión a nivel financiero y legal>]
+    "aiMaxBid": <numero entero con la puja máxima matemática recomendada descontando reparaciones, 20% depósito estatutario y riesgo>,
+    "confidence": <numero entero entre 0 y 100 basado en completitud de datos verificados>,
+    "reasons": [<arreglo con exactamente 3 strings cortos en español, máximo 14 palabras cada uno, citando cifras reales o reglas de Mercer County como gravámenes IRS, ocupación o spread neto>]
 }}
 
 Datos de la propiedad:
