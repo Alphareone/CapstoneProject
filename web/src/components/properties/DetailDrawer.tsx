@@ -48,7 +48,7 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
   const roi = p.financial.estimated_roi ?? 0;
   const liens = p.financial.total_liens ?? 0;
 
-  const effectiveFlag = p.flag ?? p.legal.documentary_flag;
+  const effectiveFlag = p.flag ?? p.legal.documentary_flag ?? null;
   const netMargin = arv - opening - repairs - (p.financial.total_liens_verified ? liens : 0);
 
   if (roi >= 25) {
@@ -340,18 +340,20 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
     ["sem", "d_sem"],
   ];
 
-  const roiStyle = p ? roiVisualStyle(p.financial.estimated_roi, p.flag ?? p.legal.documentary_flag) : { bg: "var(--risk-pending-bg)", accent: "#374151" };
+  const roiStyle = p
+    ? roiVisualStyle(p.financial.estimated_roi, p.flag ?? p.legal.documentary_flag ?? null)
+    : { bg: "var(--risk-pending-bg)", accent: "#374151" };
 
   return (
     <>
       <div
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity ${
+        className={`fixed inset-0 z-[1999] bg-black/40 transition-opacity ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={onClose}
       />
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-full w-[440px] max-w-[92vw] flex-col bg-paper shadow-[-12px_0_40px_rgba(0,0,0,.2)] transition-transform ${
+        className={`fixed right-0 top-0 z-[2000] flex h-full w-[440px] max-w-[92vw] flex-col bg-paper shadow-[-12px_0_40px_rgba(0,0,0,.2)] transition-transform ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >

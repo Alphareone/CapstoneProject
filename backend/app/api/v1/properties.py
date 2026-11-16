@@ -56,6 +56,26 @@ _MERCER_ZIP_ARV: dict[str, int] = {
     "08601": 195000,  # Trenton
 }
 
+_HOUSE_PHOTOS = [
+    "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1605276374104-dee2a0ed3cd6?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1576941089067-2de3c901e126?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1598228723793-52759bba239c?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+]
+
+
+def _pick_photo(prop_id: str, existing: str | None) -> str:
+    if existing and existing.startswith("http"):
+        return existing
+    idx = int(hashlib.md5(prop_id.encode("utf-8")).hexdigest()[:6], 16) % len(_HOUSE_PHOTOS)
+    return _HOUSE_PHOTOS[idx]
+
 
 def _seed_factor(prop_id: str) -> float:
     """Genera una variación determinista (-12% a +14%) por propiedad."""
@@ -77,7 +97,6 @@ def _derive_financials(
     if fin and fin.opening_price and fin.opening_price > 0:
         opening = fin.opening_price
     else:
-        # Si es roja, opening suele estar más cerca o por encima del ARV (KR-03 / poco margen)
         ratio = 0.82 if eff_flag == "red" else 0.58 if eff_flag == "yellow" else 0.46
         opening = round((arv * ratio) / 1000) * 1000
 
@@ -85,7 +104,6 @@ def _derive_financials(
     if fin and fin.estimated_repairs is not None and fin.estimated_repairs > 0:
         repairs = fin.estimated_repairs
     else:
-        # Modelo ClearBid RH-01 ajustado a escala residencial de entrada
         repairs = round((sqft * 22 * factor) / 500) * 500
 
     liens = (fin.total_liens or 0) if (fin and fin.total_liens_verified) else 0
@@ -169,7 +187,7 @@ async def list_properties(
             estimated_value=arv,
             estimated_roi=real_roi,
             auction_date=p.legal.auction_date if p.legal else None,
-            thumbnail_url=p.thumbnail_url,
+            thumbnail_url=_pick_photo(str(p.id), p.thumbnail_url),
         )
         for p, opening, arv, real_roi in sliced
     ]
@@ -380,7 +398,9 @@ async def get_property(
     if p is None:
         raise errors.not_found("Propiedad inexistente.")
 
-    photos = json.loads(p.photos) if isinstance(p.photos, str) else (p.photos or [])
+    raw_photos = json.loads(p.photos) if isinstance(p.photos, str) else (p.photos or [])
+    photos = raw_photos if raw_photos else [_pick_photo(str(p.id), p.thumbnail_url)]
+
     if p.legal:
         legal_data = {column.name: getattr(p.legal, column.name) for column in p.legal.__table__.columns}
         try:
