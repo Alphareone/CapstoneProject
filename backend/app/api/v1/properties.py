@@ -1,18 +1,14 @@
 """Módulo 5.4/5.5 — Propiedades, mapa, facetas y semáforo (lectura)."""
 from datetime import datetime
+import os
+import json
 
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel
+import httpx
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-import os
-import json
-from pydantic import BaseModel
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
 
 from app.core import errors
 from app.core.deps import get_current_user
@@ -292,7 +288,6 @@ async def get_property(
     p = await _load_full(db, property_id)
     if p is None:
         raise errors.not_found("Propiedad inexistente.")
-    import json
 
     photos = json.loads(p.photos) if isinstance(p.photos, str) else (p.photos or [])
     if p.legal:
@@ -356,37 +351,48 @@ async def property_traffic_light(
 class AIPredictionRequest(BaseModel):
     property_data: dict
 
+
 @router.post("/ai-advisor")
 async def get_ai_advisor(payload: AIPredictionRequest):
-    if not genai:
-        raise HTTPException(status_code=500, detail="google-generativeai no está instalado en el requirements.txt")
-        
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="Falta GEMINI_API_KEY en las variables de entorno de Render")
-        
-    genai.configure(api_key=api_key)
-    
-    model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
-    
-    prompt = f"""
-    Eres ClearBid AI, un asesor experto en inversiones inmobiliarias y subastas (foreclosures) en New Jersey.
-    Analiza los siguientes datos de una propiedad (ARV, precio base, reparaciones, ocupación, alertas legales del semáforo) y devuelve estrictamente un JSON con esta estructura exacta:
-    {{
-        "score": <numero entero entre 0 y 100 indicando viabilidad de inversión>,
-        "verdict": "<'STRONG BUY' si es muy buena, 'MODERATE / CAUTION' si hay dudas, 'HIGH RISK / AVOID' si es peligrosa>",
-        "verdictColor": "<'#16A34A' para STRONG BUY, '#D97706' para MODERATE, '#DC2626' para HIGH RISK>",
-        "aiMaxBid": <numero entero con la puja máxima matemática recomendada descontando reparaciones y riesgo>,
-        "confidence": <numero entero entre 0 y 100 de tu nivel de confianza en el análisis>,
-        "reasons": [<arreglo con exactamente 3 strings cortos, máximo 12 palabras cada uno, justificando tu decisión a nivel financiero y legal>]
-    }}
-    
-    Datos de la propiedad:
-    {json.dumps(payload.property_data)}
-    """
-    
+        raise HTTPException(status_code=500, detail="Falta GROQ_API_KEY en Render")
+
+    prompt = f"""Eres ClearBid AI, un asesor experto en inversiones inmobiliarias y subastas (foreclosures) en New Jersey.
+Analiza los siguientes datos de una propiedad (ARV, precio base, reparaciones, ocupación, alertas legales del semáforo) y devuelve estrictamente un JSON válido con esta estructura exacta:
+{{
+    "score": <numero entero entre 0 y 100 indicando viabilidad de inversión>,
+    "verdict": "<'STRONG BUY' si es muy buena, 'MODERATE / CAUTION' si hay dudas, 'HIGH RISK / AVOID' si es peligrosa>",
+    "verdictColor": "<'#16A34A' para STRONG BUY, '#D97706' para MODERATE, '#DC2626' para HIGH RISK>",
+    "aiMaxBid": <numero entero con la puja máxima matemática recomendada descontando reparaciones y riesgo>,
+    "confidence": <numero entero entre 0 y 100 de tu nivel de confianza en el análisis>,
+    "reasons": [<arreglo con exactamente 3 strings cortos en español, máximo 14 palabras cada uno, justificando tu decisión a nivel financiero y legal>]
+}}
+
+Datos de la propiedad:
+{json.dumps(payload.property_data, default=str)}"""
+
     try:
-        response = model.generate_content(prompt)
-        return json.loads(response.text)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.2,
+                },
+            )
+            if res.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Groq error: {res.text}")
+
+            content = res.json()["choices"][0]["message"]["content"]
+            return json.loads(content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
