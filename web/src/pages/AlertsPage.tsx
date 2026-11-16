@@ -16,9 +16,9 @@ export default function AlertsPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Obtenemos propiedades con alerta roja para el monitor de riesgo en tiempo real
-  const { data: redProps, isLoading: loadingRed } = useProperties({
-    flag: ["red"],
+  // Traemos el docket completo y filtramos las propiedades con semáforo rojo (oficial o documental)
+  const { data: allProps, isLoading: loadingProps } = useProperties({
+    flag: [],
     county_id: [],
     auction_type: [],
     property_type: [],
@@ -26,13 +26,15 @@ export default function AlertsPage() {
     q: "",
     sort: "",
     page: 1,
-    page_size: 20,
+    page_size: 100,
   });
 
-  if (isLoading || loadingRed) return <Spinner label={t("loading")} />;
+  if (isLoading || loadingProps) return <Spinner label={t("loading")} />;
 
   const items = data?.items ?? [];
-  const highRiskList = redProps?.items ?? [];
+  const highRiskList = (allProps?.items ?? []).filter(
+    (p) => p.flag === "red" || p.documentary_flag === "red"
+  );
 
   return (
     <div className="mx-auto max-w-[820px] space-y-6">

@@ -25,6 +25,19 @@ interface AiPrediction {
   reasons: string[];
 }
 
+function roiVisualStyle(roi: number | null | undefined, flag: string | null) {
+  if (roi === null || roi === undefined) {
+    return { bg: "var(--risk-pending-bg)", accent: "#374151" };
+  }
+  if (flag === "red" || roi < 10) {
+    return { bg: "var(--risk-red-bg)", accent: "#B91C1C" };
+  }
+  if (roi < 25 || flag === "yellow") {
+    return { bg: "var(--risk-amber-bg)", accent: "#B45309" };
+  }
+  return { bg: "var(--risk-green-bg)", accent: "#15803D" };
+}
+
 function computeAiPrediction(p: PropertyDetail): AiPrediction {
   let score = 68;
   const reasons: string[] = [];
@@ -35,7 +48,9 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
   const roi = p.financial.estimated_roi ?? 0;
   const liens = p.financial.total_liens ?? 0;
 
+  const effectiveFlag = p.flag ?? p.legal.documentary_flag;
   const netMargin = arv - opening - repairs - (p.financial.total_liens_verified ? liens : 0);
+
   if (roi >= 25) {
     score += 14;
     reasons.push(`Retorno proyectado atractivo (${roi.toFixed(1)}% ROI neto estimado).`);
@@ -43,17 +58,17 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
     score += 6;
     reasons.push(`Margen financiero moderado (${roi.toFixed(1)}% ROI estimado).`);
   } else {
-    score -= 10;
-    reasons.push("Margen estrecho entre precio de apertura, reparaciones y ARV.");
+    score -= 12;
+    reasons.push(`ROI neto (${roi.toFixed(1)}%) por debajo del umbral óptimo de subasta.`);
   }
 
-  if (p.flag === "green") {
+  if (effectiveFlag === "green") {
     score += 18;
     reasons.push("Sin alertas legales críticas ni gravámenes sobrevivientes detectados.");
-  } else if (p.flag === "yellow") {
+  } else if (effectiveFlag === "yellow") {
     score -= 12;
     reasons.push("Presenta advertencias legales/documentales que requieren revisión previa.");
-  } else if (p.flag === "red") {
+  } else if (effectiveFlag === "red") {
     score -= 36;
     reasons.push("Riesgo crítico activo en motor legal (posible gravamen senior o título comprometido).");
   } else {
@@ -78,7 +93,7 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
 
   score = Math.max(8, Math.min(96, Math.round(score)));
 
-  const riskFactor = p.flag === "green" ? 0.72 : p.flag === "yellow" ? 0.65 : 0.55;
+  const riskFactor = effectiveFlag === "green" ? 0.72 : effectiveFlag === "yellow" ? 0.65 : 0.55;
   const rawMaxBid = Math.max(opening, Math.round((arv * riskFactor - repairs) / 500) * 500);
   const aiMaxBid = arv > 0 ? Math.min(rawMaxBid, Math.max(opening, arv - repairs - 15000)) : opening;
 
@@ -94,10 +109,10 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
 
   let verdict: AiPrediction["verdict"] = "MODERATE / CAUTION";
   let verdictColor = "#D97706";
-  if (score >= 75 && p.flag !== "red") {
+  if (score >= 75 && effectiveFlag !== "red") {
     verdict = "STRONG BUY";
     verdictColor = "#16A34A";
-  } else if (score < 48 || p.flag === "red") {
+  } else if (score < 48 || effectiveFlag === "red") {
     verdict = "HIGH RISK / AVOID";
     verdictColor = "#DC2626";
   }
@@ -110,6 +125,7 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
 }
 
 function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
+  const effectiveFlag = (p.flag ?? p.legal.documentary_flag ?? "PENDING").toUpperCase();
   const rulesHtml = (p.traffic_light?.rules ?? [])
     .map(
       (r) => `
@@ -141,29 +157,30 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
   <title>${titleName}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111827; margin: 32px; line-height: 1.5; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111827; padding-bottom: 16px; margin-bottom: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1B2A4A; padding-bottom: 16px; margin-bottom: 24px; }
     .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 12px; background: #f3f4f6; }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
     .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
     .card-label { font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 600; }
     .card-val { font-size: 18px; font-weight: 800; margin-top: 4px; }
-    h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-top: 24px; }
+    h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: #1B2A4A; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-top: 24px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .ai-box { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid ${ai.verdictColor}; border-radius: 8px; padding: 14px; margin-bottom: 20px; }
+    .disclaimer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280; }
     @media print { .no-print { display: none; } body { margin: 16px; } }
   </style>
 </head>
 <body onload="window.print()">
   <div class="header">
     <div>
-      <div style="font-size:12px;font-weight:700;color:#4f46e5;">CLEARBID NJ · AUCTION DUE DILIGENCE REPORT</div>
-      <h1 style="margin:4px 0 2px;font-size:22px;">${p.address}</h1>
+      <div style="font-size:12px;font-weight:700;color:#1B6B72;">CLEARBID NJ · AUCTION DUE DILIGENCE REPORT</div>
+      <h1 style="margin:4px 0 2px;font-size:22px;color:#1B2A4A;">${p.address}</h1>
       <div style="color:#4b5563;font-size:14px;">${p.city}, NJ ${p.zip} · Case: ${p.legal.case_number ?? "N/A"}</div>
     </div>
     <div style="text-align:right;">
-      <span class="badge">RISK FLAG: ${(p.flag ?? "PENDING").toUpperCase()}</span>
+      <span class="badge">RISK FLAG: ${effectiveFlag}</span>
       <div style="font-size:11px;color:#6b7280;margin-top:6px;">Generated: ${new Date().toLocaleString()}</div>
-      <button class="no-print" onclick="window.print()" style="margin-top:8px;padding:6px 12px;background:#111827;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Print / Save as PDF</button>
+      <button class="no-print" onclick="window.print()" style="margin-top:8px;padding:6px 12px;background:#1B2A4A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Print / Save as PDF</button>
     </div>
   </div>
 
@@ -172,20 +189,20 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
       <strong>AI VIABILITY PREDICTION: <span style="color:${ai.verdictColor};">${ai.verdict}</span></strong>
       <strong>Viability Score: ${ai.score}/100 (Confidence: ${ai.confidence}%)</strong>
     </div>
-    <p style="margin:8px 0 6px;font-size:13px;"><strong>AI Recommended Max Bid:</strong> ${money(ai.aiMaxBid)}</p>
+    <p style="margin:8px 0 6px;font-size:13px;"><strong>AI Optimal Max Bid:</strong> ${money(ai.aiMaxBid)}</p>
     <ul style="margin:0;padding-left:18px;font-size:13px;color:#374151;">
       ${ai.reasons.map((r) => `<li>${r}</li>`).join("")}
     </ul>
   </div>
 
-  <h2>1. Financial & Valuation Summary</h2>
+  <h2>1. Financial & Valuation Summary (Spread Ledger)</h2>
   <div class="grid">
     <div class="card"><div class="card-label">Opening Bid</div><div class="card-val">${money(p.financial.opening_price)}</div></div>
     <div class="card"><div class="card-label">After-Repair Value (ARV)</div><div class="card-val">${money(p.financial.arv)}</div></div>
-    <div class="card"><div class="card-label">Estimated ROI</div><div class="card-val">${roiText(p.financial.estimated_roi)}</div></div>
+    <div class="card"><div class="card-label">Estimated Net ROI</div><div class="card-val">${roiText(p.financial.estimated_roi)}</div></div>
     <div class="card"><div class="card-label">Estimated Repairs</div><div class="card-val">${money(p.financial.estimated_repairs)}</div></div>
     <div class="card"><div class="card-label">Reported Liens</div><div class="card-val">${money(p.financial.total_liens)} ${p.financial.total_liens_verified ? "(Verified)" : "(Unverified)"}</div></div>
-    <div class="card"><div class="card-label">Potential Profit</div><div class="card-val">${money(p.financial.potential_profit)}</div></div>
+    <div class="card"><div class="card-label">Potential Net Profit</div><div class="card-val">${money(p.financial.potential_profit)}</div></div>
   </div>
 
   <h2>2. Legal & Physical Profile</h2>
@@ -228,6 +245,11 @@ function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
       ${rulesHtml || `<tr><td colspan="3" style="padding:8px;">No rule evaluations recorded.</td></tr>`}
     </tbody>
   </table>
+
+  <div class="disclaimer">
+    <strong>Prepared by ClearBid NJ Analyst · Public Record Information Disclosure:</strong>
+    Nothing in a ClearBid report or service constitutes legal, tax, financial, or investment advice. ClearBid NJ is not a law firm, title insurer, lender, investment advisor, brokerage, or fiduciary, and never bids, holds funds, or takes title. A licensed NJ title company is required for any property acquired. Information current as of ${new Date().toLocaleDateString()}.
+  </div>
 </body>
 </html>`;
 
@@ -269,12 +291,12 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
           body: JSON.stringify({ property_data: p }),
         });
 
-        if (!res.ok) throw new Error(`Error en API de Gemini: ${res.status}`);
+        if (!res.ok) throw new Error(`Error en API de IA: ${res.status}`);
 
         const data = await res.json();
         if (isMounted) setAi(data);
       } catch (err) {
-        console.warn("API de Gemini falló o no configurada. Activando IA de respaldo...", err);
+        console.warn("API de IA falló o no configurada. Activando respaldo local...", err);
         if (isMounted) setAi(computeAiPrediction(p));
       } finally {
         if (isMounted) setIsAiLoading(false);
@@ -317,6 +339,8 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
     ["fis", "d_fis"],
     ["sem", "d_sem"],
   ];
+
+  const roiStyle = p ? roiVisualStyle(p.financial.estimated_roi, p.flag ?? p.legal.documentary_flag) : { bg: "var(--risk-pending-bg)", accent: "#374151" };
 
   return (
     <>
@@ -371,9 +395,9 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                 <>
                   <div
                     className="mb-3 rounded-xl border border-line2 p-4 text-center"
-                    style={{ background: `var(--${flagBg(p.flag)})`, color: "#111827" }}
+                    style={{ background: roiStyle.bg, color: "#111827" }}
                   >
-                    <div className="text-3xl font-extrabold" style={{ color: flagAccent(p.flag) }}>
+                    <div className="text-3xl font-extrabold" style={{ color: roiStyle.accent }}>
                       {roiText(p.financial.estimated_roi)}
                     </div>
                     <div className="text-xs font-medium" style={{ color: "#4B5563" }}>
@@ -383,7 +407,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
                   {isAiLoading ? (
                     <div className="mb-3 flex flex-col items-center justify-center rounded-xl border border-line2 bg-wash p-6">
-                      <Spinner label="Gemini AI is analyzing property..." />
+                      <Spinner label="ClearBid AI is analyzing property..." />
                     </div>
                   ) : ai ? (
                     <div className="mb-3 rounded-xl border border-line2 bg-wash p-3.5">
@@ -623,9 +647,4 @@ function flagBg(flag: string | null): string {
       : s === "r"
         ? "risk-red-bg"
         : "risk-pending-bg";
-}
-
-function flagAccent(flag: string | null): string {
-  const s = flagShort(flag);
-  return s === "g" ? "#15803D" : s === "a" ? "#B45309" : s === "r" ? "#B91C1C" : "#374151";
 }
