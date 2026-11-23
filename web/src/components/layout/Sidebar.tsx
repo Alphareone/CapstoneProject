@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import Chip from "@/components/ui/Chip";
+import { useFacets } from "@/hooks/useProperties";
 import { useCounties } from "@/hooks/useReference";
 import { useCreateSegment, useDeleteSegment, useSegments } from "@/hooks/useSegments";
 import { AUCTIONS, AUC_LBL, TYPES, TYPE_LBL } from "@/lib/format";
@@ -26,6 +27,30 @@ export default function Sidebar() {
   const { data: segments } = useSegments();
   const createSegment = useCreateSegment();
   const deleteSegment = useDeleteSegment();
+
+  // Consultamos las facetas globales para ocultar opciones vacías (0 resultados)
+  const { data: facets } = useFacets({
+    flag: [],
+    county_id: [],
+    auction_type: [],
+    property_type: [],
+    min_roi: null,
+    q: "",
+    sort: f.sort,
+    page: 1,
+    page_size: 1,
+  });
+
+  const availableAuctions = facets
+    ? AUCTIONS.filter((a) => (facets.auction_type?.[a] ?? 0) > 0 || f.auction_type.includes(a))
+    : AUCTIONS;
+
+  const availableTypes = facets
+    ? TYPES.filter((ty) => (facets.property_type?.[ty] ?? 0) > 0 || f.property_type.includes(ty))
+    : TYPES;
+
+  const roiCount = (threshold: number) =>
+    facets?.roi_buckets?.find((b) => b.gte === threshold)?.count;
 
   const Title = ({ children }: { children: React.ReactNode }) => (
     <div className="mb-2 mt-4 px-[2px] text-xs font-extrabold uppercase tracking-wide text-ink2 first:mt-0">
@@ -59,6 +84,7 @@ export default function Sidebar() {
             onClick={() => f.toggle("flag", fl.v)}
           >
             {t(fl.k)}
+            {facets?.flag?.[fl.v] != null ? ` (${facets.flag[fl.v]})` : ""}
           </Chip>
         ))}
       </div>
@@ -78,31 +104,53 @@ export default function Sidebar() {
         ))}
       </div>
 
-      <Title>{t("f_auctiontype")}</Title>
-      <div className="flex flex-wrap gap-[7px]">
-        {AUCTIONS.map((a) => (
-          <Chip key={a} active={f.auction_type.includes(a)} onClick={() => f.toggle("auction_type", a)}>
-            {AUC_LBL[a]}
-          </Chip>
-        ))}
-      </div>
+      {availableAuctions.length > 0 && (
+        <>
+          <Title>{t("f_auctiontype")}</Title>
+          <div className="flex flex-wrap gap-[7px]">
+            {availableAuctions.map((a) => (
+              <Chip
+                key={a}
+                active={f.auction_type.includes(a)}
+                onClick={() => f.toggle("auction_type", a)}
+              >
+                {AUC_LBL[a] ?? a}
+                {facets?.auction_type?.[a] != null ? ` (${facets.auction_type[a]})` : ""}
+              </Chip>
+            ))}
+          </div>
+        </>
+      )}
 
-      <Title>{t("f_type")}</Title>
-      <div className="flex flex-wrap gap-[7px]">
-        {TYPES.map((ty) => (
-          <Chip key={ty} active={f.property_type.includes(ty)} onClick={() => f.toggle("property_type", ty)}>
-            {TYPE_LBL[ty]}
-          </Chip>
-        ))}
-      </div>
+      {availableTypes.length > 0 && (
+        <>
+          <Title>{t("f_type")}</Title>
+          <div className="flex flex-wrap gap-[7px]">
+            {availableTypes.map((ty) => (
+              <Chip
+                key={ty}
+                active={f.property_type.includes(ty)}
+                onClick={() => f.toggle("property_type", ty)}
+              >
+                {TYPE_LBL[ty] ?? ty}
+                {facets?.property_type?.[ty] != null ? ` (${facets.property_type[ty]})` : ""}
+              </Chip>
+            ))}
+          </div>
+        </>
+      )}
 
       <Title>{t("f_roi")}</Title>
       <div className="flex flex-wrap gap-[7px]">
-        {ROIS.map((r) => (
-          <Chip key={r.v} active={f.min_roi === r.v} onClick={() => f.setRoi(r.v)}>
-            {r.l}
-          </Chip>
-        ))}
+        {ROIS.map((r) => {
+          const cnt = roiCount(r.v);
+          return (
+            <Chip key={r.v} active={f.min_roi === r.v} onClick={() => f.setRoi(r.v)}>
+              {r.l}
+              {cnt != null ? ` (${cnt})` : ""}
+            </Chip>
+          );
+        })}
       </div>
 
       <Title>{t("f_segments")}</Title>
