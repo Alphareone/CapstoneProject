@@ -5,7 +5,10 @@ import FlagPill from "@/components/ui/FlagPill";
 import Spinner from "@/components/ui/Spinner";
 import { useProperty } from "@/hooks/useProperties";
 import { useSavedIds, useToggleSaved } from "@/hooks/useSaved";
+import { api } from "@/lib/api";
 import { AUC_LBL, fdate, flagShort, money, roiText, TYPE_LBL } from "@/lib/format";
+import { downloadPropertyDossierPdf } from "@/lib/pdfDossier";
+import { useAuth } from "@/store/auth";
 import { useToast } from "@/store/toast";
 import type { PropertyDetail, RuleResult } from "@/types/api";
 
@@ -38,7 +41,7 @@ function roiVisualStyle(roi: number | null | undefined, flag: string | null) {
   return { bg: "var(--risk-green-bg)", accent: "#15803D" };
 }
 
-function computeAiPrediction(p: PropertyDetail): AiPrediction {
+function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
   let score = 68;
   const reasons: string[] = [];
 
@@ -53,42 +56,82 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
 
   if (roi >= 25) {
     score += 14;
-    reasons.push(`Retorno proyectado atractivo (${roi.toFixed(1)}% ROI neto estimado).`);
+    reasons.push(
+      isEs
+        ? `Retorno proyectado atractivo (${roi.toFixed(1)}% ROI neto estimado).`
+        : `Attractive projected return (${roi.toFixed(1)}% estimated net ROI).`
+    );
   } else if (roi >= 15) {
     score += 6;
-    reasons.push(`Margen financiero moderado (${roi.toFixed(1)}% ROI estimado).`);
+    reasons.push(
+      isEs
+        ? `Margen financiero moderado (${roi.toFixed(1)}% ROI estimado).`
+        : `Moderate financial spread (${roi.toFixed(1)}% estimated ROI).`
+    );
   } else {
     score -= 12;
-    reasons.push(`ROI neto (${roi.toFixed(1)}%) por debajo del umbral óptimo de subasta.`);
+    reasons.push(
+      isEs
+        ? `ROI neto (${roi.toFixed(1)}%) por debajo del umbral óptimo de subasta.`
+        : `Net ROI (${roi.toFixed(1)}%) is below optimal auction threshold.`
+    );
   }
 
   if (effectiveFlag === "green") {
     score += 18;
-    reasons.push("Sin alertas legales críticas ni gravámenes sobrevivientes detectados.");
+    reasons.push(
+      isEs
+        ? "Sin alertas legales críticas ni gravámenes sobrevivientes detectados."
+        : "No critical legal alerts or surviving senior liens detected."
+    );
   } else if (effectiveFlag === "yellow") {
     score -= 12;
-    reasons.push("Presenta advertencias legales/documentales que requieren revisión previa.");
+    reasons.push(
+      isEs
+        ? "Presenta advertencias legales/documentales que requieren revisión previa."
+        : "Shows documentary or legal warnings requiring pre-bid verification."
+    );
   } else if (effectiveFlag === "red") {
     score -= 36;
-    reasons.push("Riesgo crítico activo en motor legal (posible gravamen senior o título comprometido).");
+    reasons.push(
+      isEs
+        ? "Riesgo crítico activo en motor legal (posible gravamen senior o título comprometido)."
+        : "Active critical legal risk (potential senior lien or title defect)."
+    );
   } else {
     score -= 8;
-    reasons.push("Evaluación legal incompleta; se recomienda verificar registro de título.");
+    reasons.push(
+      isEs
+        ? "Evaluación legal incompleta; se recomienda verificar registro de título."
+        : "Incomplete legal review; independent title search strongly advised."
+    );
   }
 
   if (p.legal.occupancy === "vacant") {
     score += 5;
-    reasons.push("Propiedad desocupada: reduce costos y tiempos de toma de posesión.");
+    reasons.push(
+      isEs
+        ? "Propiedad desocupada: reduce costos y tiempos de toma de posesión."
+        : "Vacant property: lowers post-auction possession time and legal costs."
+    );
   } else if (p.legal.occupancy === "occupied") {
     score -= 7;
-    reasons.push("Inmueble ocupado: considerar costos legales de desalojo.");
+    reasons.push(
+      isEs
+        ? "Inmueble ocupado: considerar costos legales de desalojo."
+        : "Occupied property: factor in NJ ejectment timeline and legal fees."
+    );
   }
 
   if (p.physical.condition === "good") {
     score += 4;
   } else if (p.physical.condition === "needs_work" || p.physical.condition === "poor") {
     score -= 5;
-    reasons.push("Requiere rehabilitación física significativa antes de reventa.");
+    reasons.push(
+      isEs
+        ? "Requiere rehabilitación física significativa antes de reventa."
+        : "Requires substantial physical rehab prior to resale."
+    );
   }
 
   score = Math.max(8, Math.min(96, Math.round(score)));
@@ -118,154 +161,21 @@ function computeAiPrediction(p: PropertyDetail): AiPrediction {
   }
 
   if (netMargin > 0 && reasons.length < 3) {
-    reasons.push(`Ganancia bruta potencial estimada en ${money(netMargin)}.`);
+    reasons.push(
+      isEs
+        ? `Ganancia bruta potencial estimada en ${money(netMargin)}.`
+        : `Estimated gross equity spread of ${money(netMargin)}.`
+    );
   }
 
   return { score, verdict, verdictColor, aiMaxBid, confidence, reasons: reasons.slice(0, 3) };
 }
 
-function downloadPropertyReport(p: PropertyDetail, ai: AiPrediction) {
-  const effectiveFlag = (p.flag ?? p.legal.documentary_flag ?? "PENDING").toUpperCase();
-  const rulesHtml = (p.traffic_light?.rules ?? [])
-    .map(
-      (r) => `
-      <tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>${r.title ?? r.code}</strong></td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-transform:uppercase;">${r.status}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${r.message ?? "—"}</td>
-      </tr>`
-    )
-    .join("");
-
-  const evidenceHtml = (p.legal.documentary_evidence ?? [])
-    .map(
-      (ev) => `
-      <li style="margin-bottom:6px;">
-        <strong>${ev.title}</strong> (${ev.source}${ev.reference ? ` · ${ev.reference}` : ""})
-        ${ev.reported_amount != null ? ` — <strong>${money(ev.reported_amount)}</strong>` : ""}
-        ${ev.note ? `<br/><span style="color:#4b5563;font-size:12px;">${ev.note}</span>` : ""}
-      </li>`
-    )
-    .join("");
-
-  const titleName = `ClearBid_Report_${p.address.replace(/[^a-zA-Z0-9]/g, "_")}`;
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${titleName}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111827; margin: 32px; line-height: 1.5; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1B2A4A; padding-bottom: 16px; margin-bottom: 24px; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 12px; background: #f3f4f6; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
-    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
-    .card-label { font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 600; }
-    .card-val { font-size: 18px; font-weight: 800; margin-top: 4px; }
-    h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: #1B2A4A; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-top: 24px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .ai-box { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid ${ai.verdictColor}; border-radius: 8px; padding: 14px; margin-bottom: 20px; }
-    .disclaimer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #6b7280; }
-    @media print { .no-print { display: none; } body { margin: 16px; } }
-  </style>
-</head>
-<body onload="window.print()">
-  <div class="header">
-    <div>
-      <div style="font-size:12px;font-weight:700;color:#1B6B72;">CLEARBID NJ · AUCTION DUE DILIGENCE REPORT</div>
-      <h1 style="margin:4px 0 2px;font-size:22px;color:#1B2A4A;">${p.address}</h1>
-      <div style="color:#4b5563;font-size:14px;">${p.city}, NJ ${p.zip} · Case: ${p.legal.case_number ?? "N/A"}</div>
-    </div>
-    <div style="text-align:right;">
-      <span class="badge">RISK FLAG: ${effectiveFlag}</span>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px;">Generated: ${new Date().toLocaleString()}</div>
-      <button class="no-print" onclick="window.print()" style="margin-top:8px;padding:6px 12px;background:#1B2A4A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Print / Save as PDF</button>
-    </div>
-  </div>
-
-  <div class="ai-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <strong>AI VIABILITY PREDICTION: <span style="color:${ai.verdictColor};">${ai.verdict}</span></strong>
-      <strong>Viability Score: ${ai.score}/100 (Confidence: ${ai.confidence}%)</strong>
-    </div>
-    <p style="margin:8px 0 6px;font-size:13px;"><strong>AI Optimal Max Bid:</strong> ${money(ai.aiMaxBid)}</p>
-    <ul style="margin:0;padding-left:18px;font-size:13px;color:#374151;">
-      ${ai.reasons.map((r) => `<li>${r}</li>`).join("")}
-    </ul>
-  </div>
-
-  <h2>1. Financial & Valuation Summary (Spread Ledger)</h2>
-  <div class="grid">
-    <div class="card"><div class="card-label">Opening Bid</div><div class="card-val">${money(p.financial.opening_price)}</div></div>
-    <div class="card"><div class="card-label">After-Repair Value (ARV)</div><div class="card-val">${money(p.financial.arv)}</div></div>
-    <div class="card"><div class="card-label">Estimated Net ROI</div><div class="card-val">${roiText(p.financial.estimated_roi)}</div></div>
-    <div class="card"><div class="card-label">Estimated Repairs</div><div class="card-val">${money(p.financial.estimated_repairs)}</div></div>
-    <div class="card"><div class="card-label">Reported Liens</div><div class="card-val">${money(p.financial.total_liens)} ${p.financial.total_liens_verified ? "(Verified)" : "(Unverified)"}</div></div>
-    <div class="card"><div class="card-label">Potential Net Profit</div><div class="card-val">${money(p.financial.potential_profit)}</div></div>
-  </div>
-
-  <h2>2. Legal & Physical Profile</h2>
-  <table>
-    <tr>
-      <td style="padding:6px 0;"><strong>Auction Type:</strong> ${p.legal.auction_type ? AUC_LBL[p.legal.auction_type] : "—"}</td>
-      <td style="padding:6px 0;"><strong>Auction Date:</strong> ${fdate(p.legal.auction_date)}</td>
-      <td style="padding:6px 0;"><strong>Property Type:</strong> ${p.property_type ? TYPE_LBL[p.property_type] : "—"}</td>
-    </tr>
-    <tr>
-      <td style="padding:6px 0;"><strong>Title Status:</strong> ${p.legal.title_status ?? "—"}</td>
-      <td style="padding:6px 0;"><strong>Occupancy:</strong> ${p.legal.occupancy ?? "—"}</td>
-      <td style="padding:6px 0;"><strong>Area / Beds / Baths:</strong> ${p.physical.sqft ?? "—"} sqft · ${p.physical.beds ?? "—"} bd / ${p.physical.baths ?? "—"} ba</td>
-    </tr>
-    <tr>
-      <td style="padding:6px 0;"><strong>Surviving IRS Lien:</strong> ${money(p.legal.surviving_irs_lien)}</td>
-      <td style="padding:6px 0;"><strong>Senior Liens:</strong> ${money(p.legal.senior_liens)}</td>
-      <td style="padding:6px 0;"><strong>Condition / Year:</strong> ${p.physical.condition ?? "—"} (${p.physical.year_built ?? "—"})</td>
-    </tr>
-  </table>
-
-  ${
-    p.legal.documentary_summary
-      ? `<h2>3. Documentary Public Record Findings</h2>
-         <p style="font-size:13px;">${p.legal.documentary_summary}</p>
-         ${evidenceHtml ? `<ul style="font-size:13px;">${evidenceHtml}</ul>` : ""}`
-      : ""
-  }
-
-  <h2>4. Traffic-Light Risk Engine Rules (v${p.traffic_light?.engine_version ?? "2.5"})</h2>
-  <table>
-    <thead>
-      <tr style="background:#f9fafb;text-align:left;">
-        <th style="padding:8px;border-bottom:1px solid #d1d5db;">Rule</th>
-        <th style="padding:8px;border-bottom:1px solid #d1d5db;">Status</th>
-        <th style="padding:8px;border-bottom:1px solid #d1d5db;">Assessment</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rulesHtml || `<tr><td colspan="3" style="padding:8px;">No rule evaluations recorded.</td></tr>`}
-    </tbody>
-  </table>
-
-  <div class="disclaimer">
-    <strong>Prepared by ClearBid NJ Analyst · Public Record Information Disclosure:</strong>
-    Nothing in a ClearBid report or service constitutes legal, tax, financial, or investment advice. ClearBid NJ is not a law firm, title insurer, lender, investment advisor, brokerage, or fiduciary, and never bids, holds funds, or takes title. A licensed NJ title company is required for any property acquired. Information current as of ${new Date().toLocaleDateString()}.
-  </div>
-</body>
-</html>`;
-
-  const printWindow = window.open("", "_blank");
-  if (printWindow) {
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-  } else {
-    alert("Permite las ventanas emergentes para generar el PDF.");
-  }
-}
-
 export default function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isEs = i18n.language?.toLowerCase().startsWith("es") ?? false;
   const toast = useToast((s) => s.show);
+  const userEmail = useAuth((s) => s.user?.email);
   const [tab, setTab] = useState<Tab>("fin");
   const { data: p, isLoading } = useProperty(id);
   const { ids } = useSavedIds();
@@ -273,6 +183,10 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
   const [ai, setAi] = useState<AiPrediction | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [sendEmailCopy, setSendEmailCopy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const open = !!id;
   const isSaved = id ? ids.has(id) : false;
@@ -288,16 +202,15 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
         const res = await fetch(`${baseUrl}/api/v1/properties/ai-advisor`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ property_data: p }),
+          body: JSON.stringify({ property_data: p, lang: isEs ? "es" : "en" }),
         });
 
         if (!res.ok) throw new Error(`Error en API de IA: ${res.status}`);
 
         const data = await res.json();
         if (isMounted) setAi(data);
-      } catch (err) {
-        console.warn("API de IA falló o no configurada. Activando respaldo local...", err);
-        if (isMounted) setAi(computeAiPrediction(p));
+      } catch {
+        if (isMounted) setAi(computeAiPrediction(p, isEs));
       } finally {
         if (isMounted) setIsAiLoading(false);
       }
@@ -306,7 +219,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
     return () => {
       isMounted = false;
     };
-  }, [p]);
+  }, [p, isEs]);
 
   async function save() {
     if (!id) return;
@@ -314,14 +227,34 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
     toast(isSaved ? t("removed_saved") : t("saved_toast"));
   }
 
-  function handleDownloadReport() {
+  async function handleConfirmDownload() {
     if (!p) return;
-    if (!ai) {
-      toast("Espere un segundo, la IA está analizando los datos...");
-      return;
+    setDownloading(true);
+    try {
+      downloadPropertyDossierPdf(p);
+      if (sendEmailCopy) {
+        await api.post(`/api/v1/properties/${p.id}/email-dossier`, {
+          lang: isEs ? "es" : "en",
+        });
+        toast(
+          isEs
+            ? `PDF descargado y copia enviada a ${userEmail ?? "tu correo"}`
+            : `PDF downloaded and copy sent to ${userEmail ?? "your email"}`
+        );
+      } else {
+        toast(isEs ? "Dossier PDF descargado correctamente" : "PDF dossier downloaded successfully");
+      }
+      setExportModalOpen(false);
+    } catch {
+      toast(
+        isEs
+          ? "PDF descargado (no se pudo enviar la copia por correo)"
+          : "PDF downloaded (email copy could not be sent)"
+      );
+      setExportModalOpen(false);
+    } finally {
+      setDownloading(false);
     }
-    downloadPropertyReport(p, ai);
-    toast("Generando PDF...");
   }
 
   const KV = ({ k, v, color }: { k: string; v: string; color?: string }) => (
@@ -409,7 +342,13 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
                   {isAiLoading ? (
                     <div className="mb-3 flex flex-col items-center justify-center rounded-xl border border-line2 bg-wash p-6">
-                      <Spinner label="ClearBid AI is analyzing property..." />
+                      <Spinner
+                        label={
+                          isEs
+                            ? "ClearBid AI está analizando la propiedad..."
+                            : "ClearBid AI is analyzing property..."
+                        }
+                      />
                     </div>
                   ) : ai ? (
                     <div className="mb-3 rounded-xl border border-line2 bg-wash p-3.5">
@@ -430,11 +369,17 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                             {ai.score}
                             <span className="text-sm font-normal text-ink2">/100</span>
                           </div>
-                          <div className="text-[11px] text-ink2">Viability Score · {ai.confidence}% conf.</div>
+                          <div className="text-[11px] text-ink2">
+                            {isEs
+                              ? `Puntaje de viabilidad · ${ai.confidence}% conf.`
+                              : `Viability Score · ${ai.confidence}% conf.`}
+                          </div>
                         </div>
                         <div className="text-right">
                           <div className="text-sm font-bold text-ink">{money(ai.aiMaxBid)}</div>
-                          <div className="text-[11px] text-ink2">AI Optimal Max Bid</div>
+                          <div className="text-[11px] text-ink2">
+                            {isEs ? "Puja Máxima Óptima IA" : "AI Optimal Max Bid"}
+                          </div>
                         </div>
                       </div>
                       <ul className="mt-2.5 space-y-1 border-t border-line2 pt-2 text-[12px] text-ink2">
@@ -629,13 +574,105 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                 {isSaved ? "★ " : "☆ "}
                 {t("cta_save")}
               </button>
-              <button className="btn btn-ghost flex-1" onClick={handleDownloadReport}>
+              <button className="btn btn-ghost flex-1" onClick={() => setExportModalOpen(true)}>
                 ⬇ {t("cta_prepare")}
               </button>
             </div>
           </>
         )}
       </aside>
+
+      {/* MODAL DE DESCARGA PDF + COPIA OPCIONAL AL CORREO */}
+      {exportModalOpen && p && (
+        <div
+          className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !downloading && setExportModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[430px] rounded-2xl border border-line2 bg-paper p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold">Prepare for Auction · PDF Dossier</h3>
+                <p className="mt-0.5 text-xs text-ink2">
+                  {p.address}, {p.city}, NJ {p.zip}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={downloading}
+                onClick={() => setExportModalOpen(false)}
+                className="text-lg text-ink2 hover:text-ink"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-line2 bg-wash/60 p-3 text-xs text-ink2">
+              {isEs ? (
+                <>
+                  Se descargará directamente el reporte ejecutivo en formato <b>PDF</b> con el análisis financiero, legal, físico, el diagnóstico de IA y los avisos regulatorios de ClearBid NJ.
+                </>
+              ) : (
+                <>
+                  Your executive due diligence dossier will download directly as a <b>PDF</b> including financial spread, legal status, physical profile, AI assessment, and ClearBid NJ disclosures.
+                </>
+              )}
+            </div>
+
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-line2 p-3 text-[13px] hover:border-accent">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                checked={sendEmailCopy}
+                onChange={(e) => setSendEmailCopy(e.target.checked)}
+              />
+              <div>
+                <div className="font-semibold">
+                  {isEs
+                    ? "Enviar una copia a mi correo registrado"
+                    : "Send a copy to my registered email"}
+                </div>
+                <div className="text-xs text-ink2">
+                  {isEs
+                    ? userEmail
+                      ? `Opcional · Se enviará a ${userEmail}`
+                      : "Opcional · Se enviará a tu correo de cuenta"
+                    : userEmail
+                      ? `Optional · Will be sent to ${userEmail}`
+                      : "Optional · Will be sent to your account email"}
+                </div>
+              </div>
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={downloading}
+                onClick={() => setExportModalOpen(false)}
+                className="btn btn-ghost"
+              >
+                {isEs ? "Cancelar" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                disabled={downloading}
+                onClick={handleConfirmDownload}
+                className="btn"
+              >
+                {downloading
+                  ? isEs
+                    ? "Generando..."
+                    : "Generating..."
+                  : isEs
+                    ? "Descargar PDF"
+                    : "Download PDF"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
