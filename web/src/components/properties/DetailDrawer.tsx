@@ -171,6 +171,12 @@ function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
   return { score, verdict, verdictColor, aiMaxBid, confidence, reasons: reasons.slice(0, 3) };
 }
 
+function looksSpanish(text: string): boolean {
+  return /\b(estimado|grav[aá]menes|dep[oó]sito|puja|indica|verificado|riesgo|propiedad|sugiere|rentabilidad)\b/i.test(
+    text
+  );
+}
+
 export default function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { t, i18n } = useTranslation();
   const isEs = i18n.language?.toLowerCase().startsWith("es") ?? false;
@@ -207,8 +213,14 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
         if (!res.ok) throw new Error(`Error en API de IA: ${res.status}`);
 
-        const data = await res.json();
-        if (isMounted) setAi(data);
+        const data: AiPrediction = await res.json();
+        const joinedReasons = (data.reasons ?? []).join(" ");
+        // Si la UI está en inglés pero el endpoint devolvió español, usamos el motor bilingüe en inglés
+        if (!isEs && looksSpanish(joinedReasons)) {
+          if (isMounted) setAi(computeAiPrediction(p, false));
+        } else if (isMounted) {
+          setAi(data);
+        }
       } catch {
         if (isMounted) setAi(computeAiPrediction(p, isEs));
       } finally {
@@ -231,15 +243,17 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
     if (!p) return;
     setDownloading(true);
     try {
-      downloadPropertyDossierPdf(p);
+      const { filename, base64 } = downloadPropertyDossierPdf(p, ai);
       if (sendEmailCopy) {
         await api.post(`/api/v1/properties/${p.id}/email-dossier`, {
           lang: isEs ? "es" : "en",
+          pdf_base64: base64,
+          filename,
         });
         toast(
           isEs
-            ? `PDF descargado y copia enviada a ${userEmail ?? "tu correo"}`
-            : `PDF downloaded and copy sent to ${userEmail ?? "your email"}`
+            ? `PDF descargado y adjuntado al correo ${userEmail ?? ""}`
+            : `PDF downloaded and attached to email ${userEmail ?? ""}`
         );
       } else {
         toast(isEs ? "Dossier PDF descargado correctamente" : "PDF dossier downloaded successfully");
@@ -631,17 +645,17 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
               <div>
                 <div className="font-semibold">
                   {isEs
-                    ? "Enviar una copia a mi correo registrado"
-                    : "Send a copy to my registered email"}
+                    ? "Enviar una copia del PDF a mi correo registrado"
+                    : "Send a PDF copy to my registered email"}
                 </div>
                 <div className="text-xs text-ink2">
                   {isEs
                     ? userEmail
-                      ? `Opcional · Se enviará a ${userEmail}`
-                      : "Opcional · Se enviará a tu correo de cuenta"
+                      ? `Opcional · Se enviará adjunto a ${userEmail}`
+                      : "Opcional · Se enviará adjunto a tu correo de cuenta"
                     : userEmail
-                      ? `Optional · Will be sent to ${userEmail}`
-                      : "Optional · Will be sent to your account email"}
+                      ? `Optional · Will be attached to ${userEmail}`
+                      : "Optional · Will be attached to your account email"}
                 </div>
               </div>
             </label>
