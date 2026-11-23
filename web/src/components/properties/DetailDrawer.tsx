@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import FlagPill from "@/components/ui/FlagPill";
@@ -171,12 +171,6 @@ function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
   return { score, verdict, verdictColor, aiMaxBid, confidence, reasons: reasons.slice(0, 3) };
 }
 
-function looksSpanish(text: string): boolean {
-  return /\b(estimado|grav[aá]menes|dep[oó]sito|puja|indica|verificado|riesgo|propiedad|sugiere|rentabilidad)\b/i.test(
-    text
-  );
-}
-
 export default function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { t, i18n } = useTranslation();
   const isEs = i18n.language?.toLowerCase().startsWith("es") ?? false;
@@ -187,9 +181,6 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   const { ids } = useSavedIds();
   const toggleSaved = useToggleSaved();
 
-  const [ai, setAi] = useState<AiPrediction | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [sendEmailCopy, setSendEmailCopy] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -197,41 +188,8 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   const open = !!id;
   const isSaved = id ? ids.has(id) : false;
 
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchAiAnalysis() {
-      if (!p) return;
-      setIsAiLoading(true);
-      try {
-        const rawBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-        const baseUrl = rawBase.replace(/\/api\/v1\/?$/, "");
-        const res = await fetch(`${baseUrl}/api/v1/properties/ai-advisor`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ property_data: p, lang: isEs ? "es" : "en" }),
-        });
-
-        if (!res.ok) throw new Error(`Error en API de IA: ${res.status}`);
-
-        const data: AiPrediction = await res.json();
-        const joinedReasons = (data.reasons ?? []).join(" ");
-        // Si la UI está en inglés pero el endpoint devolvió español, usamos el motor bilingüe en inglés
-        if (!isEs && looksSpanish(joinedReasons)) {
-          if (isMounted) setAi(computeAiPrediction(p, false));
-        } else if (isMounted) {
-          setAi(data);
-        }
-      } catch {
-        if (isMounted) setAi(computeAiPrediction(p, isEs));
-      } finally {
-        if (isMounted) setIsAiLoading(false);
-      }
-    }
-    fetchAiAnalysis();
-    return () => {
-      isMounted = false;
-    };
-  }, [p, isEs]);
+  // Mismo cálculo determinista en EN y ES: mismos números y veredicto siempre
+  const ai = useMemo(() => (p ? computeAiPrediction(p, isEs) : null), [p, isEs]);
 
   async function save() {
     if (!id) return;
@@ -354,17 +312,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                     </div>
                   </div>
 
-                  {isAiLoading ? (
-                    <div className="mb-3 flex flex-col items-center justify-center rounded-xl border border-line2 bg-wash p-6">
-                      <Spinner
-                        label={
-                          isEs
-                            ? "ClearBid AI está analizando la propiedad..."
-                            : "ClearBid AI is analyzing property..."
-                        }
-                      />
-                    </div>
-                  ) : ai ? (
+                  {ai && (
                     <div className="mb-3 rounded-xl border border-line2 bg-wash p-3.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
@@ -402,7 +350,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                         ))}
                       </ul>
                     </div>
-                  ) : null}
+                  )}
 
                   <KV k={t("fin_opening")} v={money(p.financial.opening_price)} />
                   <KV
