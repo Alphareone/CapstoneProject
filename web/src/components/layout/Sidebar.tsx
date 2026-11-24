@@ -28,7 +28,6 @@ export default function Sidebar() {
   const createSegment = useCreateSegment();
   const deleteSegment = useDeleteSegment();
 
-  // Consultamos las facetas globales para ocultar opciones vacías (0 resultados)
   const { data: facets } = useFacets({
     flag: [],
     county_id: [],
@@ -40,14 +39,6 @@ export default function Sidebar() {
     page: 1,
     page_size: 1,
   });
-
-  const availableAuctions = facets
-    ? AUCTIONS.filter((a) => (facets.auction_type?.[a] ?? 0) > 0 || f.auction_type.includes(a))
-    : AUCTIONS;
-
-  const availableTypes = facets
-    ? TYPES.filter((ty) => (facets.property_type?.[ty] ?? 0) > 0 || f.property_type.includes(ty))
-    : TYPES;
 
   const roiCount = (threshold: number) =>
     facets?.roi_buckets?.find((b) => b.gte === threshold)?.count;
@@ -76,17 +67,20 @@ export default function Sidebar() {
 
       <Title>{t("f_flag")}</Title>
       <div className="flex flex-wrap gap-[7px]">
-        {FLAGS.map((fl) => (
-          <Chip
-            key={fl.v}
-            active={f.flag.includes(fl.v)}
-            dot={fl.d}
-            onClick={() => f.toggle("flag", fl.v)}
-          >
-            {t(fl.k)}
-            {facets?.flag?.[fl.v] != null ? ` (${facets.flag[fl.v]})` : ""}
-          </Chip>
-        ))}
+        {FLAGS.map((fl) => {
+          const cnt = facets?.flag?.[fl.v];
+          return (
+            <Chip
+              key={fl.v}
+              active={f.flag.includes(fl.v)}
+              dot={fl.d}
+              onClick={() => f.toggle("flag", fl.v)}
+            >
+              {t(fl.k)}
+              {typeof cnt === "number" && cnt > 0 ? ` (${cnt})` : ""}
+            </Chip>
+          );
+        })}
       </div>
 
       <Title>{t("f_county")}</Title>
@@ -104,41 +98,39 @@ export default function Sidebar() {
         ))}
       </div>
 
-      {availableAuctions.length > 0 && (
-        <>
-          <Title>{t("f_auctiontype")}</Title>
-          <div className="flex flex-wrap gap-[7px]">
-            {availableAuctions.map((a) => (
-              <Chip
-                key={a}
-                active={f.auction_type.includes(a)}
-                onClick={() => f.toggle("auction_type", a)}
-              >
-                {AUC_LBL[a] ?? a}
-                {facets?.auction_type?.[a] != null ? ` (${facets.auction_type[a]})` : ""}
-              </Chip>
-            ))}
-          </div>
-        </>
-      )}
+      <Title>{t("f_auctiontype")}</Title>
+      <div className="flex flex-wrap gap-[7px]">
+        {AUCTIONS.map((a) => {
+          const cnt = facets?.auction_type?.[a];
+          return (
+            <Chip
+              key={a}
+              active={f.auction_type.includes(a)}
+              onClick={() => f.toggle("auction_type", a)}
+            >
+              {AUC_LBL[a] ?? a}
+              {typeof cnt === "number" && cnt > 0 ? ` (${cnt})` : ""}
+            </Chip>
+          );
+        })}
+      </div>
 
-      {availableTypes.length > 0 && (
-        <>
-          <Title>{t("f_type")}</Title>
-          <div className="flex flex-wrap gap-[7px]">
-            {availableTypes.map((ty) => (
-              <Chip
-                key={ty}
-                active={f.property_type.includes(ty)}
-                onClick={() => f.toggle("property_type", ty)}
-              >
-                {TYPE_LBL[ty] ?? ty}
-                {facets?.property_type?.[ty] != null ? ` (${facets.property_type[ty]})` : ""}
-              </Chip>
-            ))}
-          </div>
-        </>
-      )}
+      <Title>{t("f_type")}</Title>
+      <div className="flex flex-wrap gap-[7px]">
+        {TYPES.map((ty) => {
+          const cnt = facets?.property_type?.[ty];
+          return (
+            <Chip
+              key={ty}
+              active={f.property_type.includes(ty)}
+              onClick={() => f.toggle("property_type", ty)}
+            >
+              {TYPE_LBL[ty] ?? ty}
+              {typeof cnt === "number" && cnt > 0 ? ` (${cnt})` : ""}
+            </Chip>
+          );
+        })}
+      </div>
 
       <Title>{t("f_roi")}</Title>
       <div className="flex flex-wrap gap-[7px]">
@@ -147,7 +139,7 @@ export default function Sidebar() {
           return (
             <Chip key={r.v} active={f.min_roi === r.v} onClick={() => f.setRoi(r.v)}>
               {r.l}
-              {cnt != null ? ` (${cnt})` : ""}
+              {typeof cnt === "number" && cnt > 0 ? ` (${cnt})` : ""}
             </Chip>
           );
         })}

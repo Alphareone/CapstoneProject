@@ -9,7 +9,7 @@ export interface DossierAiSummary {
   reasons: string[];
 }
 
-function sanitizePdfText(str: string): string {
+function esc(str: string): string {
   return str
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -19,169 +19,297 @@ function sanitizePdfText(str: string): string {
     .replace(/\)/g, "\\)");
 }
 
-function wrapText(text: string, maxChars = 88): string[] {
-  const words = text.split(/\s+/);
-  const out: string[] = [];
-  let line = "";
+function wrap(text: string, maxChars: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let cur = "";
   for (const w of words) {
-    if ((line + " " + w).trim().length <= maxChars) {
-      line = (line + " " + w).trim();
+    if ((cur + " " + w).trim().length <= maxChars) {
+      cur = (cur + " " + w).trim();
     } else {
-      if (line) out.push(line);
-      line = w;
+      if (cur) lines.push(cur);
+      cur = w;
     }
   }
-  if (line) out.push(line);
-  return out;
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+class PdfCanvas {
+  private ops: string[] = [];
+
+  rect(x: number, y: number, w: number, h: number, fillRgb?: [number, number, number], strokeRgb?: [number, number, number]) {
+    if (fillRgb) {
+      this.ops.push(`${fillRgb[0].toFixed(3)} ${fillRgb[1].toFixed(3)} ${fillRgb[2].toFixed(3)} rg`);
+    }
+    if (strokeRgb) {
+      this.ops.push(`${strokeRgb[0].toFixed(3)} ${strokeRgb[1].toFixed(3)} ${strokeRgb[2].toFixed(3)} RG`);
+      this.ops.push("0.7 w");
+    }
+    this.ops.push(`${x} ${y} ${w} ${h} re`);
+    if (fillRgb && strokeRgb) this.ops.push("B");
+    else if (fillRgb) this.ops.push("f");
+    else if (strokeRgb) this.ops.push("S");
+  }
+
+  line(x1: number, y1: number, x2: number, y2: number, rgb: [number, number, number] = [0.85, 0.87, 0.9], width = 0.7) {
+    this.ops.push(`${rgb[0].toFixed(3)} ${rgb[1].toFixed(3)} ${rgb[2].toFixed(3)} RG`);
+    this.ops.push(`${width} w`);
+    this.ops.push(`${x1} ${y1} m ${x2} ${y2} l S`);
+  }
+
+  text(
+    str: string,
+    x: number,
+    y: number,
+    size = 9.5,
+    bold = false,
+    rgb: [number, number, number] = [0.1, 0.12, 0.16]
+  ) {
+    this.ops.push("BT");
+    this.ops.push(`${rgb[0].toFixed(3)} ${rgb[1].toFixed(3)} ${rgb[2].toFixed(3)} rg`);
+    this.ops.push(`${bold ? "/F2" : "/F1"} ${size} Tf`);
+    this.ops.push(`1 0 0 1 ${x} ${y} Tm`);
+    this.ops.push(`(${esc(str)}) Tj`);
+    this.ops.push("ET");
+  }
+
+  sectionHeader(title: string, y: number): number {
+    this.rect(40, y - 4, 532, 18, [0.94, 0.96, 0.98]);
+    this.rect(40, y - 4, 3.5, 18, [0.11, 0.42, 0.45]);
+    this.text(title, 50, y + 1.5, 9.5, true, [0.11, 0.16, 0.29]);
+    return y - 18;
+  }
+
+  toStream(): string {
+    return this.ops.join("\n");
+  }
 }
 
 export function buildPropertyDossierPdf(
   p: PropertyDetail,
   ai?: DossierAiSummary | null
 ): { filename: string; base64: string; blob: Blob } {
-  const effectiveFlag = (p.flag ?? p.legal.documentary_flag ?? "HIGH").toUpperCase();
+  const c = new PdfCanvas();
+  const effectiveFlag = (p.flag ?? p.legal.documentary_flag ?? "HIGH").toLowerCase();
   const opening = p.financial.opening_price ?? 0;
   const deposit = p.legal.required_deposit ?? (opening > 0 ? Math.round(opening * 0.2) : null);
 
-  const lines: { text: string; size: number; bold?: boolean; gap?: number }[] = [
-    { text: "CLEARBID NJ - PRE-AUCTION PROPERTY DUE DILIGENCE DOSSIER", size: 14, bold: true, gap: 20 },
-    { text: `${p.address}, ${p.city}, NJ ${p.zip}`, size: 11, bold: true, gap: 15 },
-    {
-      text: `Risk Classification: ${effectiveFlag}  |  County: Mercer, NJ  |  Generated: ${new Date().toLocaleDateString("en-US")}`,
-      size: 9.5,
-      gap: 18,
-    },
+  // 1. CABECERA EJECUTIVA AZUL MARINO (#1B2A4A)
+  c.rect(0, 712, 612, 80, [0.106, 0.165, 0.29]);
+  c.rect(0, 709, 612, 3, [0.106, 0.42, 0.447]);
+  c.text("CLEARBID NJ  |  AUCTION DUE DILIGENCE DOSSIER", 40, 766, 8.5, true, [0.55, 0.85, 0.87]);
+  c.text(p.address, 40, 745, 15, true, [1, 1, 1]);
+  c.text(
+    `${p.city}, NJ ${p.zip}   •   Mercer County   •   Case: ${p.legal.case_number ?? "Pending Clerk Index"}`,
+    40,
+    727,
+    9,
+    false,
+    [0.82, 0.86, 0.92]
+  );
 
-    { text: "1. FINANCIAL & SPREAD LEDGER", size: 11, bold: true, gap: 14 },
+  // Badge de Riesgo en esquina superior derecha
+  const badgeBg: [number, number, number] =
+    effectiveFlag === "green"
+      ? [0.09, 0.52, 0.25]
+      : effectiveFlag === "yellow"
+        ? [0.76, 0.47, 0.04]
+        : [0.72, 0.11, 0.11];
+  const badgeLabel =
+    effectiveFlag === "green"
+      ? "RISK: LOW / CLEAR"
+      : effectiveFlag === "yellow"
+        ? "RISK: MODERATE"
+        : "RISK: HIGH / ALERT";
+  c.rect(448, 742, 124, 22, badgeBg);
+  c.text(badgeLabel, 458, 749.5, 8.5, true, [1, 1, 1]);
+  c.text(`Issued: ${new Date().toLocaleDateString("en-US")}`, 468, 727, 8, false, [0.82, 0.86, 0.92]);
+
+  let y = 684;
+
+  // 2. SECCIÓN FINANCIERA (6 TARJETAS EN CUADRÍCULA 3x2)
+  y = c.sectionHeader("1. FINANCIAL & VALUATION SPREAD LEDGER", y);
+
+  const metrics = [
+    { label: "OPENING BID", val: money(p.financial.opening_price), accent: [0.11, 0.16, 0.29] as [number, number, number] },
+    { label: "AFTER-REPAIR VALUE (ARV)", val: money(p.financial.arv), accent: [0.11, 0.16, 0.29] as [number, number, number] },
+    { label: "ESTIMATED NET ROI", val: roiText(p.financial.estimated_roi), accent: [0.09, 0.52, 0.25] as [number, number, number] },
+    { label: "ESTIMATED REPAIRS", val: money(p.financial.estimated_repairs), accent: [0.25, 0.29, 0.35] as [number, number, number] },
     {
-      text: `Opening Bid: ${money(p.financial.opening_price)}   |   After-Repair Value (ARV): ${money(p.financial.arv)}`,
-      size: 9.5,
-      gap: 13,
+      label: p.financial.total_liens_verified ? "VERIFIED LIENS" : "REPORTED LIENS (UNVERIFIED)",
+      val: money(p.financial.total_liens),
+      accent: [0.76, 0.47, 0.04] as [number, number, number],
     },
     {
-      text: `Estimated Rehab Anchor: ${money(p.financial.estimated_repairs)}   |   Reported Liens: ${money(p.financial.total_liens)} (${p.financial.total_liens_verified ? "Verified" : "Unverified"})`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Suggested Max Bid: ${money(p.financial.suggested_max_bid)}   |   Potential Net Profit: ${money(p.financial.potential_profit)}   |   Est. ROI: ${roiText(p.financial.estimated_roi)}`,
-      size: 9.5,
-      bold: true,
-      gap: 17,
+      label: "POTENTIAL NET PROFIT",
+      val: money(p.financial.potential_profit),
+      accent: ((p.financial.potential_profit ?? 0) < 0 ? [0.72, 0.11, 0.11] : [0.09, 0.52, 0.25]) as [number, number, number],
     },
   ];
 
+  const cardW = 171;
+  const cardH = 38;
+  for (let i = 0; i < metrics.length; i++) {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const cx = 40 + col * (cardW + 9.5);
+    const cy = y - row * (cardH + 8) - 24;
+    c.rect(cx, cy, cardW, cardH, [0.985, 0.99, 0.995], [0.84, 0.87, 0.91]);
+    c.text(metrics[i].label, cx + 9, cy + 25, 7, true, [0.42, 0.46, 0.53]);
+    c.text(metrics[i].val, cx + 9, cy + 9, 12, true, metrics[i].accent);
+  }
+  y -= 98;
+
+  // 3. SECCIÓN IA (TARJETA DESTACADA)
   if (ai) {
-    lines.push(
-      { text: "2. CLEARBID AI VIABILITY ASSESSMENT", size: 11, bold: true, gap: 14 },
-      {
-        text: `Verdict: ${ai.verdict}  |  Viability Score: ${ai.score}/100 (${ai.confidence}% confidence)  |  AI Optimal Max Bid: ${money(ai.aiMaxBid)}`,
-        size: 9.5,
-        bold: true,
-        gap: 13,
-      }
-    );
+    y = c.sectionHeader("2. CLEARBID AI VIABILITY & BIDDING GUIDANCE", y);
+    const reasonLines: string[] = [];
     for (const r of ai.reasons.slice(0, 3)) {
-      for (const wrapped of wrapText(`- ${r}`, 92)) {
-        lines.push({ text: wrapped, size: 9, gap: 12 });
-      }
+      reasonLines.push(...wrap(`• ${r}`, 92));
     }
-    lines.push({ text: "", size: 6, gap: 6 });
+    const boxH = 36 + reasonLines.length * 11.5;
+    c.rect(40, y - boxH + 12, 532, boxH, [0.965, 0.978, 0.985], [0.78, 0.84, 0.88]);
+
+    const vColor: [number, number, number] =
+      ai.verdict.includes("STRONG")
+        ? [0.09, 0.52, 0.25]
+        : ai.verdict.includes("AVOID")
+          ? [0.72, 0.11, 0.11]
+          : [0.76, 0.47, 0.04];
+
+    c.text(`VERDICT: ${ai.verdict}`, 50, y - 3, 9.5, true, vColor);
+    c.text(
+      `Viability Score: ${ai.score}/100 (${ai.confidence}% confidence)   |   AI Optimal Max Bid: ${money(ai.aiMaxBid)}   |   Suggested Max Bid: ${money(p.financial.suggested_max_bid)}`,
+      50,
+      y - 16,
+      8.5,
+      true,
+      [0.15, 0.2, 0.28]
+    );
+    let ry = y - 30;
+    for (const rl of reasonLines) {
+      c.text(rl, 52, ry, 8.5, false, [0.24, 0.28, 0.34]);
+      ry -= 11.5;
+    }
+    y -= boxH + 10;
   }
 
-  lines.push(
-    { text: `${ai ? "3" : "2"}. LEGAL, TITLE & AUCTION DOCKET`, size: 11, bold: true, gap: 14 },
-    {
-      text: `Auction Type: ${p.legal.auction_type ? AUC_LBL[p.legal.auction_type] ?? p.legal.auction_type : "Sheriff sale"}   |   Scheduled Date: ${p.legal.auction_date ? fdate(p.legal.auction_date) : "Pending Sheriff Schedule"}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Venue: ${p.legal.location ?? "Mercer County Civil Courthouse, 175 S Broad St, Trenton, NJ"}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Docket / Case #: ${p.legal.case_number ?? "Pending Clerk Index"}   |   Title Status: ${p.legal.title_status ?? "Preliminary Public Record Review"}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Occupancy: ${p.legal.occupancy ?? "Unknown (AS-IS / No interior access)"}   |   Statutory Deposit (20%): ${money(deposit)}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Surviving IRS Liens: ${p.legal.surviving_irs_lien != null ? money(p.legal.surviving_irs_lien) : "$0 (Verify prior to bid)"}   |   Senior Liens: ${p.legal.senior_liens != null ? money(p.legal.senior_liens) : "$0 (Verify prior to bid)"}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Bankruptcy Flag: ${p.legal.bankruptcy_indicator ? "Yes" : "No"}   |   Open Permits: ${p.legal.open_permits_count ?? 0}   |   Ownership: ${p.legal.ownership_type ?? "Fee Simple"}`,
-      size: 9.5,
-      gap: 17,
-    },
+  // 4. PERFIL LEGAL Y SUBASTA (TABLA DE 2 COLUMNAS)
+  y = c.sectionHeader(`${ai ? "3" : "2"}. LEGAL, TITLE & SHERIFF DOCKET`, y);
+  const legalRows: [string, string, string, string][] = [
+    [
+      "Auction Type:",
+      p.legal.auction_type ? AUC_LBL[p.legal.auction_type] ?? p.legal.auction_type : "Sheriff sale",
+      "Scheduled Date:",
+      p.legal.auction_date ? fdate(p.legal.auction_date) : "Pending Schedule",
+    ],
+    [
+      "Title Status:",
+      p.legal.title_status ?? "Preliminary Review",
+      "Occupancy:",
+      p.legal.occupancy ?? "Unknown (AS-IS)",
+    ],
+    [
+      "Statutory Deposit (20%):",
+      money(deposit),
+      "Ownership Type:",
+      p.legal.ownership_type ?? "Fee Simple",
+    ],
+    [
+      "Surviving IRS Lien:",
+      p.legal.surviving_irs_lien != null ? money(p.legal.surviving_irs_lien) : "$0 (Verify)",
+      "Senior Liens:",
+      p.legal.senior_liens != null ? money(p.legal.senior_liens) : "$0 (Verify)",
+    ],
+    [
+      "Bankruptcy Flag:",
+      p.legal.bankruptcy_indicator ? "Yes" : "No",
+      "Open Permits:",
+      String(p.legal.open_permits_count ?? 0),
+    ],
+  ];
 
-    { text: `${ai ? "4" : "3"}. PHYSICAL & NEIGHBORHOOD PROFILE`, size: 11, bold: true, gap: 14 },
-    {
-      text: `Property Type: ${p.property_type ? TYPE_LBL[p.property_type] ?? p.property_type : "Single family"}   |   Condition: ${p.physical.condition ?? "AS-IS (Exterior drive-by only)"}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Living Area: ${p.physical.sqft ? `${p.physical.sqft} sqft` : "N/A"}   |   Lot Size: ${p.physical.lot_sqft ? `${p.physical.lot_sqft} sqft` : "N/A"}   |   Beds/Baths: ${p.physical.beds ?? "-"} bd / ${p.physical.baths ?? "-"} ba   |   Built: ${p.physical.year_built ?? "-"}`,
-      size: 9.5,
-      gap: 13,
-    },
-    {
-      text: `Neighborhood: ${p.physical.neighborhood ?? p.city}   |   School District Rating: ${p.physical.school_rating ? `${p.physical.school_rating}/10` : "Not rated"}`,
-      size: 9.5,
-      gap: 17,
+  for (const [k1, v1, k2, v2] of legalRows) {
+    c.text(k1, 46, y, 8.5, true, [0.35, 0.4, 0.47]);
+    c.text(v1, 162, y, 8.5, false, [0.1, 0.12, 0.16]);
+    c.text(k2, 315, y, 8.5, true, [0.35, 0.4, 0.47]);
+    c.text(v2, 425, y, 8.5, false, [0.1, 0.12, 0.16]);
+    c.line(40, y - 4, 572, y - 4, [0.91, 0.93, 0.95], 0.5);
+    y -= 15;
+  }
+  y -= 6;
+
+  // 5. PERFIL FÍSICO Y VECINDARIO
+  y = c.sectionHeader(`${ai ? "4" : "3"}. PHYSICAL & NEIGHBORHOOD PROFILE`, y);
+  const physRows: [string, string, string, string][] = [
+    [
+      "Property Type:",
+      p.property_type ? TYPE_LBL[p.property_type] ?? p.property_type : "Single family",
+      "Condition:",
+      p.physical.condition ?? "AS-IS (Drive-by)",
+    ],
+    [
+      "Living Area / Lot:",
+      `${p.physical.sqft ? `${p.physical.sqft} sqft` : "N/A"} / ${p.physical.lot_sqft ? `${p.physical.lot_sqft} sqft` : "N/A"}`,
+      "Beds / Baths:",
+      `${p.physical.beds ?? "-"} bd / ${p.physical.baths ?? "-"} ba`,
+    ],
+    [
+      "Year Built:",
+      p.physical.year_built ? String(p.physical.year_built) : "N/A",
+      "Neighborhood / School:",
+      `${p.physical.neighborhood ?? p.city} (${p.physical.school_rating ? `${p.physical.school_rating}/10` : "N/R"})`,
+    ],
+  ];
+
+  for (const [k1, v1, k2, v2] of physRows) {
+    c.text(k1, 46, y, 8.5, true, [0.35, 0.4, 0.47]);
+    c.text(v1, 162, y, 8.5, false, [0.1, 0.12, 0.16]);
+    c.text(k2, 315, y, 8.5, true, [0.35, 0.4, 0.47]);
+    c.text(v2, 425, y, 8.5, false, [0.1, 0.12, 0.16]);
+    c.line(40, y - 4, 572, y - 4, [0.91, 0.93, 0.95], 0.5);
+    y -= 15;
+  }
+  y -= 6;
+
+  // 6. HALLAZGOS DOCUMENTALES / REGLAS
+  if (p.legal.documentary_summary && y > 120) {
+    y = c.sectionHeader(`${ai ? "5" : "4"}. PUBLIC RECORD DOCUMENTARY FINDINGS`, y);
+    for (const line of wrap(p.legal.documentary_summary, 96).slice(0, 4)) {
+      c.text(line, 46, y, 8.5, false, [0.2, 0.24, 0.3]);
+      y -= 12;
     }
+  }
+
+  // PIE DE PÁGINA REGULATORIO (CAJA INFERIOR FIJA)
+  c.rect(40, 28, 532, 44, [0.96, 0.965, 0.975], [0.85, 0.87, 0.9]);
+  c.text(
+    "CLEARBID NJ REGULATORY DISCLOSURE & LIMITATION OF LIABILITY:",
+    48,
+    59,
+    7.5,
+    true,
+    [0.11, 0.16, 0.29]
+  );
+  c.text(
+    "ClearBid NJ is an information service and is NOT a law firm, title insurer, lender, brokerage, or investment advisor.",
+    48,
+    48,
+    7.2,
+    false,
+    [0.35, 0.39, 0.45]
+  );
+  c.text(
+    "NJ Sheriff sales are strictly AS-IS with no interior inspection. Retain licensed NJ counsel and title insurance before bidding.",
+    48,
+    38,
+    7.2,
+    false,
+    [0.35, 0.39, 0.45]
   );
 
-  if (p.legal.documentary_summary) {
-    lines.push({
-      text: `${ai ? "5" : "4"}. DOCUMENTARY PUBLIC RECORD FINDINGS`,
-      size: 11,
-      bold: true,
-      gap: 14,
-    });
-    for (const wrapped of wrapText(p.legal.documentary_summary, 92)) {
-      lines.push({ text: wrapped, size: 9, gap: 12 });
-    }
-    lines.push({ text: "", size: 6, gap: 6 });
-  }
-
-  lines.push(
-    { text: "MANDATORY REGULATORY DISCLOSURE (CLEARBID NJ)", size: 10, bold: true, gap: 13 },
-    {
-      text: "ClearBid NJ is an information service and is NOT a law firm, title insurer, lender, or investment advisor.",
-      size: 8.5,
-      gap: 11,
-    },
-    {
-      text: "NJ Sheriff sales are strictly AS-IS with no interior inspection. Always retain licensed NJ counsel and title insurance.",
-      size: 8.5,
-      gap: 11,
-    }
-  );
-
-  let y = 755;
-  const ops: string[] = ["BT"];
-  for (const line of lines) {
-    if (y < 42) break;
-    if (line.text) {
-      const font = line.bold ? "/F2" : "/F1";
-      ops.push(`${font} ${line.size} Tf`);
-      ops.push(`1 0 0 1 46 ${y} Tm`);
-      ops.push(`(${sanitizePdfText(line.text)}) Tj`);
-    }
-    y -= line.gap ?? 14;
-  }
-  ops.push("ET");
-  const stream = ops.join("\n");
-
+  const stream = c.toStream();
   const objects: string[] = [
     "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
     "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",

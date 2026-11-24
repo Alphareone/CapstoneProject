@@ -42,7 +42,7 @@ function roiVisualStyle(roi: number | null | undefined, flag: string | null) {
 }
 
 function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
-  let score = 68;
+  let score = 58;
   const reasons: string[] = [];
 
   const opening = p.financial.opening_price ?? 0;
@@ -54,87 +54,82 @@ function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
   const effectiveFlag = p.flag ?? p.legal.documentary_flag ?? null;
   const netMargin = arv - opening - repairs - (p.financial.total_liens_verified ? liens : 0);
 
-  if (roi >= 25) {
-    score += 14;
+  if (roi >= 35) {
+    score += 12;
     reasons.push(
       isEs
-        ? `Retorno proyectado atractivo (${roi.toFixed(1)}% ROI neto estimado).`
-        : `Attractive projected return (${roi.toFixed(1)}% estimated net ROI).`
+        ? `Retorno proyectado sólido (${roi.toFixed(1)}% ROI neto estimado tras reparaciones).`
+        : `Strong projected spread (${roi.toFixed(1)}% estimated net ROI after rehab).`
     );
-  } else if (roi >= 15) {
-    score += 6;
+  } else if (roi >= 20) {
+    score += 7;
     reasons.push(
       isEs
         ? `Margen financiero moderado (${roi.toFixed(1)}% ROI estimado).`
-        : `Moderate financial spread (${roi.toFixed(1)}% estimated ROI).`
+        : `Moderate financial spread (${roi.toFixed(1)}% estimated net ROI).`
     );
   } else {
-    score -= 12;
+    score -= 10;
     reasons.push(
       isEs
-        ? `ROI neto (${roi.toFixed(1)}%) por debajo del umbral óptimo de subasta.`
-        : `Net ROI (${roi.toFixed(1)}%) is below optimal auction threshold.`
+        ? `ROI neto (${roi.toFixed(1)}%) ajustado para el riesgo de subasta AS-IS.`
+        : `Net ROI (${roi.toFixed(1)}%) is tight for an AS-IS sheriff auction.`
     );
   }
 
   if (effectiveFlag === "green") {
-    score += 18;
+    score += 11;
     reasons.push(
       isEs
         ? "Sin alertas legales críticas ni gravámenes sobrevivientes detectados."
         : "No critical legal alerts or surviving senior liens detected."
     );
   } else if (effectiveFlag === "yellow") {
-    score -= 12;
+    score -= 4;
     reasons.push(
       isEs
-        ? "Presenta advertencias legales/documentales que requieren revisión previa."
-        : "Shows documentary or legal warnings requiring pre-bid verification."
+        ? "Presenta advertencias documentales que requieren verificación de título."
+        : "Shows documentary warnings requiring pre-bid title verification."
     );
   } else if (effectiveFlag === "red") {
-    score -= 36;
+    score -= 26;
     reasons.push(
       isEs
-        ? "Riesgo crítico activo en motor legal (posible gravamen senior o título comprometido)."
+        ? "Riesgo crítico activo en motor legal (posible gravamen senior o defecto de título)."
         : "Active critical legal risk (potential senior lien or title defect)."
     );
   } else {
-    score -= 8;
+    score -= 14;
     reasons.push(
       isEs
-        ? "Evaluación legal incompleta; se recomienda verificar registro de título."
-        : "Incomplete legal review; independent title search strongly advised."
+        ? "Expediente legal incompleto; requiere búsqueda independiente de gravámenes."
+        : "Incomplete legal docket; independent municipal & title search required."
     );
   }
 
   if (p.legal.occupancy === "vacant") {
-    score += 5;
+    score += 3;
     reasons.push(
       isEs
-        ? "Propiedad desocupada: reduce costos y tiempos de toma de posesión."
-        : "Vacant property: lowers post-auction possession time and legal costs."
+        ? "Propiedad desocupada: reduce tiempos y costos legales de posesión."
+        : "Vacant property: reduces post-auction possession timeline and legal fees."
     );
   } else if (p.legal.occupancy === "occupied") {
-    score -= 7;
+    score -= 6;
     reasons.push(
       isEs
-        ? "Inmueble ocupado: considerar costos legales de desalojo."
-        : "Occupied property: factor in NJ ejectment timeline and legal fees."
+        ? "Inmueble ocupado: contemplar proceso de desalojo en Nueva Jersey."
+        : "Occupied property: factor in NJ ejectment timeline and legal costs."
     );
+  } else {
+    score -= 2;
   }
 
-  if (p.physical.condition === "good") {
-    score += 4;
-  } else if (p.physical.condition === "needs_work" || p.physical.condition === "poor") {
-    score -= 5;
-    reasons.push(
-      isEs
-        ? "Requiere rehabilitación física significativa antes de reventa."
-        : "Requires substantial physical rehab prior to resale."
-    );
+  if (!p.financial.total_liens_verified) {
+    score -= 3;
   }
 
-  score = Math.max(8, Math.min(96, Math.round(score)));
+  score = Math.max(18, Math.min(86, Math.round(score)));
 
   const riskFactor = effectiveFlag === "green" ? 0.72 : effectiveFlag === "yellow" ? 0.65 : 0.55;
   const rawMaxBid = Math.max(opening, Math.round((arv * riskFactor - repairs) / 500) * 500);
@@ -148,11 +143,11 @@ function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
     p.physical.sqft,
     p.physical.condition,
   ].filter((v) => v !== null && v !== undefined).length;
-  const confidence = Math.round(62 + (knownFields / 6) * 33);
+  const confidence = Math.round(58 + (knownFields / 6) * 32);
 
   let verdict: AiPrediction["verdict"] = "MODERATE / CAUTION";
   let verdictColor = "#D97706";
-  if (score >= 75 && effectiveFlag !== "red") {
+  if (score >= 74 && effectiveFlag === "green") {
     verdict = "STRONG BUY";
     verdictColor = "#16A34A";
   } else if (score < 48 || effectiveFlag === "red") {
@@ -163,8 +158,8 @@ function computeAiPrediction(p: PropertyDetail, isEs: boolean): AiPrediction {
   if (netMargin > 0 && reasons.length < 3) {
     reasons.push(
       isEs
-        ? `Ganancia bruta potencial estimada en ${money(netMargin)}.`
-        : `Estimated gross equity spread of ${money(netMargin)}.`
+        ? `Equidad bruta potencial estimada en ${money(netMargin)} antes de costos de cierre.`
+        : `Estimated gross equity spread of ${money(netMargin)} before closing costs.`
     );
   }
 
@@ -188,7 +183,6 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   const open = !!id;
   const isSaved = id ? ids.has(id) : false;
 
-  // Mismo cálculo determinista en EN y ES: mismos números y veredicto siempre
   const ai = useMemo(() => (p ? computeAiPrediction(p, isEs) : null), [p, isEs]);
 
   async function save() {
