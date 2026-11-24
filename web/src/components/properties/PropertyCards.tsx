@@ -4,8 +4,7 @@ import FlagPill from "@/components/ui/FlagPill";
 import { money, roiClass, roiText, TYPE_LBL } from "@/lib/format";
 import type { PropertyListItem } from "@/types/api";
 
-// 24 fachadas residenciales estilo suburbano Noreste / New Jersey (sin repeticiones en 20 items)
-const NJ_RESIDENTIAL_PHOTOS = [
+const SINGLE_FAMILY_PHOTOS = [
   "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?auto=format&fit=crop&w=800&q=80",
@@ -21,23 +20,28 @@ const NJ_RESIDENTIAL_PHOTOS = [
   "https://images.unsplash.com/photo-1602941525421-8f8b81d3edbb?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1558036117-15d82a90b9b1?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1592595896616-c37162298647?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1572120360610-d971b9d7767c?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1599427303058-f04cbcf4756f?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=800&q=80",
+];
+
+const MULTI_FAMILY_PHOTOS = [
+  "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1515263487990-61b07816b324?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80",
 ];
 
 function cardPhoto(p: PropertyListItem, index: number): string {
-  // Si el backend trajo una foto real personalizada (no del pool genérico), úsala
   if (p.thumbnail_url && p.thumbnail_url.startsWith("http") && !p.thumbnail_url.includes("unsplash.com")) {
     return p.thumbnail_url;
   }
-  return NJ_RESIDENTIAL_PHOTOS[index % NJ_RESIDENTIAL_PHOTOS.length];
+  if (p.property_type === "multi_family" || p.property_type === "condo") {
+    return MULTI_FAMILY_PHOTOS[index % MULTI_FAMILY_PHOTOS.length];
+  }
+  return SINGLE_FAMILY_PHOTOS[index % SINGLE_FAMILY_PHOTOS.length];
 }
 
 export default function PropertyCards({
