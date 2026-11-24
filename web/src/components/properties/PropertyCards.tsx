@@ -4,8 +4,8 @@ import FlagPill from "@/components/ui/FlagPill";
 import { money, roiClass, roiText, TYPE_LBL } from "@/lib/format";
 import type { PropertyListItem } from "@/types/api";
 
-// 24 fachadas residenciales únicas y verificadas (sin repetición entre las 20 propiedades)
-const UNIQUE_NJ_HOMES = [
+// Fachadas suburbanas tradicionales del Noreste / Nueva Jersey (sin mansiones ni piscinas)
+const NJ_SUBURBAN_HOMES = [
   "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?auto=format&fit=crop&w=800&q=80",
@@ -16,20 +16,16 @@ const UNIQUE_NJ_HOMES = [
   "https://images.unsplash.com/photo-1572120360610-d971b9d7767c?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1599427303058-f04cbcf4756f?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1449844908441-8829872d2607?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1480074568708-e7b720bb3f09?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1505843513577-22bb7d21e455?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600573472550-8090b5e0745e?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1513584684374-8bab748fbf90?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1602941525421-8f8b81d3edbb?auto=format&fit=crop&w=800&q=80",
   "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=800&q=80",
-  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1575517111478-7f6afd0973db?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1591474200752-85609331d65b?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1571939228382-b2f2b585ce15?auto=format&fit=crop&w=800&q=80",
 ];
 
 const MULTI_FAMILY_PHOTOS = [
@@ -40,13 +36,10 @@ const MULTI_FAMILY_PHOTOS = [
 ];
 
 function cardPhoto(p: PropertyListItem, index: number): string {
-  if (p.thumbnail_url && p.thumbnail_url.startsWith("http") && !p.thumbnail_url.includes("unsplash.com")) {
-    return p.thumbnail_url;
-  }
   if (p.property_type === "multi_family" || p.property_type === "condo") {
     return MULTI_FAMILY_PHOTOS[index % MULTI_FAMILY_PHOTOS.length];
   }
-  return UNIQUE_NJ_HOMES[index % UNIQUE_NJ_HOMES.length];
+  return NJ_SUBURBAN_HOMES[index % NJ_SUBURBAN_HOMES.length];
 }
 
 export default function PropertyCards({
@@ -79,7 +72,7 @@ export default function PropertyCards({
               alt={p.address}
               loading="lazy"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = UNIQUE_NJ_HOMES[0];
+                (e.currentTarget as HTMLImageElement).src = NJ_SUBURBAN_HOMES[0];
               }}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
