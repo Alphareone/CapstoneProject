@@ -135,7 +135,7 @@ export default function DashboardPage() {
           </span>
           <button
             className="btn btn-ghost btn-sm"
-            disabled={f.page >= data.total_pages}
+            disabled={f.page >= data.total_pages} 
             onClick={() => f.setPage(f.page + 1)}
           >
             {t("next")}
