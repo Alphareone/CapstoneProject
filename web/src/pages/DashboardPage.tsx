@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOutletContext } from "react-router-dom";
 
 import DetailDrawer from "@/components/properties/DetailDrawer";
 import PropertyCards from "@/components/properties/PropertyCards";
@@ -15,6 +16,7 @@ type View = "table" | "cards" | "map";
 
 export default function DashboardPage() {
   const { t } = useTranslation();
+  const outletCtx = useOutletContext<{ onOpenFilters?: () => void } | null>();
   const f = useFilterStore();
   const { data: counties } = useCounties();
   const { data, isLoading, isError } = useProperties({
@@ -29,7 +31,9 @@ export default function DashboardPage() {
     page_size: f.page_size,
   });
 
-  const [view, setView] = useState<View>("table");
+  const [view, setView] = useState<View>(() =>
+    typeof window !== "undefined" && window.innerWidth < 768 ? "cards" : "table"
+  );
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -56,24 +60,38 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div>
-      <div className="mb-[14px] flex flex-wrap items-center gap-3">
-        <h1 className="text-[19px] font-bold">{t("dash_title")}</h1>
-        <span className="text-[13px] text-ink2">
-          {data ? `${data.total} ${t("results")}` : ""}
-        </span>
-        <div className="ml-auto flex rounded-[9px] bg-chip p-[3px]">
-          {VIEWS.map(([v, lbl]) => (
+    <div className="min-w-0">
+      <div className="mb-[14px] flex flex-wrap items-center gap-2.5 sm:gap-3">
+        <div className="flex items-baseline gap-2.5">
+          <h1 className="text-[18px] font-bold sm:text-[19px]">{t("dash_title")}</h1>
+          <span className="text-[12.5px] text-ink2 sm:text-[13px]">
+            {data ? `${data.total} ${t("results")}` : ""}
+          </span>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          {outletCtx?.onOpenFilters && (
             <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`rounded-[7px] px-3 py-[7px] text-[13px] font-semibold ${
-                view === v ? "bg-paper text-ink shadow" : "text-ink2"
-              }`}
+              type="button"
+              onClick={outletCtx.onOpenFilters}
+              className="rounded-[9px] border border-line2 bg-paper px-2.5 py-[7px] text-xs font-semibold text-ink lg:hidden"
             >
-              {t(lbl)}
+              ☰ {t("f_filters")}
             </button>
-          ))}
+          )}
+          <div className="flex rounded-[9px] bg-chip p-[3px]">
+            {VIEWS.map(([v, lbl]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`rounded-[7px] px-2.5 py-[6px] text-xs font-semibold sm:px-3 sm:py-[7px] sm:text-[13px] ${
+                  view === v ? "bg-paper text-ink shadow" : "text-ink2"
+                }`}
+              >
+                {t(lbl)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -86,14 +104,16 @@ export default function DashboardPage() {
       ) : items.length === 0 && view !== "map" ? (
         <div className="card-surface p-10 text-center text-ink2">{t("no_results")}</div>
       ) : view === "table" ? (
-        <PropertyTable
-          items={items}
-          counties={counties ?? []}
-          selection={selection}
-          onToggle={toggle}
-          onToggleAll={toggleAll}
-          onOpen={setOpenId}
-        />
+        <div className="w-full overflow-x-auto">
+          <PropertyTable
+            items={items}
+            counties={counties ?? []}
+            selection={selection}
+            onToggle={toggle}
+            onToggleAll={toggleAll}
+            onOpen={setOpenId}
+          />
+        </div>
       ) : view === "cards" ? (
         <PropertyCards items={items} selection={selection} onToggle={toggle} onOpen={setOpenId} />
       ) : (

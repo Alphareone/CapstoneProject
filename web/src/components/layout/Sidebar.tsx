@@ -19,7 +19,13 @@ const ROIS = [
   { v: 35, l: "≥35%" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({
+  mobileOpen = false,
+  onCloseMobile,
+}: {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}) {
   const { t } = useTranslation();
   const toast = useToast((s) => s.show);
   const f = useFilterStore();
@@ -56,13 +62,25 @@ export default function Sidebar() {
     toast(t("seg_saved"));
   }
 
-  return (
-    <aside className="overflow-y-auto border-r border-line2 bg-paper p-[18px_16px]">
+  const content = (
+    <>
       <div className="mb-2 flex items-center justify-between">
         <Title>{t("f_filters")}</Title>
-        <span className="cursor-pointer text-xs font-semibold text-accent2" onClick={f.clear}>
-          {t("f_clear")}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="cursor-pointer text-xs font-semibold text-accent2" onClick={f.clear}>
+            {t("f_clear")}
+          </span>
+          {onCloseMobile && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              aria-label="Close filters"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-line2 text-sm text-ink2 hover:text-ink lg:hidden"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <Title>{t("f_flag")}</Title>
@@ -154,7 +172,10 @@ export default function Sidebar() {
           <div
             key={s.id}
             className="mb-[7px] flex cursor-pointer items-center gap-2 rounded-[9px] border border-line2 px-[10px] py-2 text-[13px] hover:border-accent"
-            onClick={() => f.applyFilter(s.filters)}
+            onClick={() => {
+              f.applyFilter(s.filters);
+              onCloseMobile?.();
+            }}
           >
             🔖 {s.name} <span className="text-ink2">({s.match_count})</span>
             <span
@@ -172,6 +193,40 @@ export default function Sidebar() {
           + {t("f_savesegment")}
         </button>
       </div>
-    </aside>
+
+      {onCloseMobile && (
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="btn mt-5 w-full lg:hidden"
+        >
+          ✓ Ver resultados
+        </button>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden overflow-y-auto border-r border-line2 bg-paper p-[18px_16px] lg:block">
+        {content}
+      </aside>
+
+      {/* Mobile slide-over drawer */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-[1950] bg-black/50 lg:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+      <aside
+        className={`fixed bottom-0 left-0 top-0 z-[1960] w-[290px] max-w-[85vw] overflow-y-auto border-r border-line2 bg-paper p-[18px_16px] shadow-2xl transition-transform duration-200 lg:hidden ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {content}
+      </aside>
+    </>
   );
 }

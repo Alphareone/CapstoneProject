@@ -62,8 +62,8 @@ export default function PropertyTable({
   };
 
   return (
-    <div className="card-surface overflow-hidden">
-      <table className="w-full border-collapse text-[13.5px]">
+    <div className="card-surface overflow-x-auto">
+      <table className="w-full min-w-[780px] border-collapse text-[13.5px]">
         <thead>
           <tr>
             <th className="w-[34px] border-b border-line2 bg-wash p-[11px_12px]">
@@ -105,23 +105,29 @@ export default function PropertyTable({
                   onChange={() => onToggle(p.id)}
                 />
               </td>
-              <td className="p-[11px_12px]">
+              <td className="whitespace-nowrap p-[11px_12px]">
                 <FlagPill flag={p.flag} provisionalFlag={p.documentary_flag} />
               </td>
               <td className="p-[11px_12px]">
-                <b className="block">{p.address}</b>
-                <span className="text-xs text-ink2">
+                <b className="block whitespace-nowrap">{p.address}</b>
+                <span className="whitespace-nowrap text-xs text-ink2">
                   {p.city}, NJ {p.zip}
                 </span>
               </td>
-              <td className="p-[11px_12px]">{countyName(p.county_id)}</td>
-              <td className="p-[11px_12px]">{p.property_type ? TYPE_LBL[p.property_type] : "—"}</td>
-              <td className="p-[11px_12px] text-right tabular-nums">{money(p.opening_price)}</td>
-              <td className="p-[11px_12px] text-right tabular-nums">{money(p.estimated_value)}</td>
-              <td className="p-[11px_12px] text-right tabular-nums">
+              <td className="whitespace-nowrap p-[11px_12px]">{countyName(p.county_id)}</td>
+              <td className="whitespace-nowrap p-[11px_12px]">
+                {p.property_type ? TYPE_LBL[p.property_type] : "—"}
+              </td>
+              <td className="whitespace-nowrap p-[11px_12px] text-right tabular-nums">
+                {money(p.opening_price)}
+              </td>
+              <td className="whitespace-nowrap p-[11px_12px] text-right tabular-nums">
+                {money(p.estimated_value)}
+              </td>
+              <td className="whitespace-nowrap p-[11px_12px] text-right tabular-nums">
                 <span className={roiClass(p.estimated_roi)}>{roiText(p.estimated_roi)}</span>
               </td>
-              <td className="p-[11px_12px]">{fdate(p.auction_date)}</td>
+              <td className="whitespace-nowrap p-[11px_12px]">{fdate(p.auction_date)}</td>
             </tr>
           ))}
         </tbody>
