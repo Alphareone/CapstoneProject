@@ -8,6 +8,7 @@ import { useSavedIds, useToggleSaved } from "@/hooks/useSaved";
 import { api } from "@/lib/api";
 import { AUC_LBL, fdate, flagShort, money, roiText, TYPE_LBL } from "@/lib/format";
 import { downloadPropertyDossierPdf } from "@/lib/pdfDossier";
+import { getRealStreetViewPhoto } from "@/lib/propertyPhotos";
 import { useAuth } from "@/store/auth";
 import { useToast } from "@/store/toast";
 import type { PropertyDetail, RuleResult } from "@/types/api";
@@ -185,6 +186,14 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
 
   const ai = useMemo(() => (p ? computeAiPrediction(p, isEs) : null), [p, isEs]);
 
+  const streetViewUrl = useMemo(() => {
+      if (!p) return null;
+      return (
+        getRealStreetViewPhoto(p.address) ??
+        (p.photos && p.photos.length > 0 ? p.photos[0] : null)
+      );
+    }, [p]);
+
   async function save() {
     if (!id) return;
     await toggleSaved.mutateAsync({ id, saved: isSaved });
@@ -260,7 +269,29 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
           <Spinner label={t("loading")} />
         ) : (
           <>
-            <div className="border-b border-line2 p-[18px_20px]">
+            {streetViewUrl && (
+              <div className="relative h-[145px] w-full shrink-0 overflow-hidden bg-wash">
+                <img
+                  src={streetViewUrl}
+                  alt={p.address}
+                  className="h-full w-full object-cover"
+                />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-sm text-white hover:bg-black/80"
+                >
+                  ✕
+                </button>
+                <span className="pointer-events-none absolute bottom-2.5 left-4 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/95">
+                  Google Street View · Mercer County, NJ
+                </span>
+              </div>
+            )}
+
+            <div className="border-b border-line2 p-[14px_20px]">
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-lg font-bold">{p.address}</h2>
@@ -268,9 +299,11 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                     {p.city}, NJ {p.zip}
                   </div>
                 </div>
-                <span className="cursor-pointer text-xl text-ink2" onClick={onClose}>
-                  ✕
-                </span>
+                {!streetViewUrl && (
+                  <span className="cursor-pointer text-xl text-ink2" onClick={onClose}>
+                    ✕
+                  </span>
+                )}
               </div>
               <div className="mt-2">
                 <FlagPill flag={p.flag} provisionalFlag={p.legal.documentary_flag} />
