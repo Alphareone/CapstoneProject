@@ -14,9 +14,9 @@ const FLAGS: { v: string; k: string; d: "g" | "a" | "r" }[] = [
   { v: "red", k: "red", d: "r" },
 ];
 const ROIS = [
-  { v: 20, l: "≥20%" },
-  { v: 30, l: "≥30%" },
+  { v: 15, l: "≥15%" },
   { v: 35, l: "≥35%" },
+  { v: 100, l: "≥100%" },
 ];
 
 export default function Sidebar({

@@ -280,7 +280,7 @@ async def facets(
     ).all()
 
     buckets = [
-        {"gte": t, "count": sum(1 for v in roi_vals if v >= t)} for t in (35, 30, 20)
+        {"gte": t, "count": sum(1 for v in roi_vals if v >= t)} for t in (100, 35, 15)
     ]
     return FacetsResponse(
         total=total,

@@ -33,6 +33,13 @@ export default function TopBar({
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("cb_font_scale");
+    if (saved === "large") document.documentElement.style.fontSize = "112.5%";
+    else if (saved === "xlarge") document.documentElement.style.fontSize = "125%";
+    else document.documentElement.style.fontSize = "100%";
+  }, []);
+
   const isDark = document.documentElement.classList.contains("dark");
   const navClass = ({ isActive }: { isActive: boolean }) =>
     `whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-semibold sm:px-3 sm:py-2 sm:text-[13.5px] ${
