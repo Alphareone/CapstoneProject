@@ -187,12 +187,12 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
   const ai = useMemo(() => (p ? computeAiPrediction(p, isEs) : null), [p, isEs]);
 
   const streetViewUrl = useMemo(() => {
-      if (!p) return null;
-      return (
-        getRealStreetViewPhoto(p.address) ??
-        (p.photos && p.photos.length > 0 ? p.photos[0] : null)
-      );
-    }, [p]);
+    if (!p) return null;
+    return (
+      getRealStreetViewPhoto(p.address) ??
+      (p.photos && p.photos.length > 0 ? p.photos[0] : null)
+    );
+  }, [p]);
 
   async function save() {
     if (!id) return;
@@ -212,20 +212,16 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
           filename,
         });
         toast(
-          isEs
-            ? `PDF descargado y adjuntado al correo ${userEmail ?? ""}`
-            : `PDF downloaded and attached to email ${userEmail ?? ""}`
+          userEmail
+            ? t("pdf_downloaded_email", { email: userEmail })
+            : t("pdf_downloaded_ok")
         );
       } else {
-        toast(isEs ? "Dossier PDF descargado correctamente" : "PDF dossier downloaded successfully");
+        toast(t("pdf_downloaded_ok"));
       }
       setExportModalOpen(false);
     } catch {
-      toast(
-        isEs
-          ? "PDF descargado (no se pudo enviar la copia por correo)"
-          : "PDF downloaded (email copy could not be sent)"
-      );
+      toast(t("pdf_downloaded_email_err"));
       setExportModalOpen(false);
     } finally {
       setDownloading(false);
@@ -343,13 +339,19 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                     <div className="mb-3 rounded-xl border border-line2 bg-wash p-3.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
-                          ✦ ClearBid AI Predictor
+                          ✦ {t("ai_predictor")}
                         </span>
                         <span
                           className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
                           style={{ backgroundColor: ai.verdictColor }}
                         >
-                          {ai.verdict}
+                          {t(
+                            ai.verdict === "STRONG BUY"
+                              ? "ai_verdict_strong"
+                              : ai.verdict === "HIGH RISK / AVOID"
+                                ? "ai_verdict_high"
+                                : "ai_verdict_moderate"
+                          )}
                         </span>
                       </div>
                       <div className="mt-2.5 flex items-baseline justify-between">
@@ -359,16 +361,12 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                             <span className="text-sm font-normal text-ink2">/100</span>
                           </div>
                           <div className="text-[11px] text-ink2">
-                            {isEs
-                              ? `Puntaje de viabilidad · ${ai.confidence}% conf.`
-                              : `Viability Score · ${ai.confidence}% conf.`}
+                            {t("ai_viability", { conf: ai.confidence })}
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-sm font-bold text-ink">{money(ai.aiMaxBid)}</div>
-                          <div className="text-[11px] text-ink2">
-                            {isEs ? "Puja Máxima Óptima IA" : "AI Optimal Max Bid"}
-                          </div>
+                          <div className="text-[11px] text-ink2">{t("ai_max_bid")}</div>
                         </div>
                       </div>
                       <ul className="mt-2.5 space-y-1 border-t border-line2 pt-2 text-[12px] text-ink2">
@@ -583,7 +581,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
           >
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h3 className="text-base font-bold">Prepare for Auction · PDF Dossier</h3>
+                <h3 className="text-base font-bold">{t("pdf_modal_title")}</h3>
                 <p className="mt-0.5 text-xs text-ink2">
                   {p.address}, {p.city}, NJ {p.zip}
                 </p>
@@ -599,15 +597,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
             </div>
 
             <div className="mt-4 rounded-xl border border-line2 bg-wash/60 p-3 text-xs text-ink2">
-              {isEs ? (
-                <>
-                  Se descargará directamente el reporte ejecutivo en formato <b>PDF</b> con el análisis financiero, legal, físico, el diagnóstico de IA y los avisos regulatorios de ClearBid NJ.
-                </>
-              ) : (
-                <>
-                  Your executive due diligence dossier will download directly as a <b>PDF</b> including financial spread, legal status, physical profile, AI assessment, and ClearBid NJ disclosures.
-                </>
-              )}
+              {t("pdf_modal_desc")}
             </div>
 
             <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-line2 p-3 text-[13px] hover:border-accent">
@@ -618,19 +608,11 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                 onChange={(e) => setSendEmailCopy(e.target.checked)}
               />
               <div>
-                <div className="font-semibold">
-                  {isEs
-                    ? "Enviar una copia del PDF a mi correo registrado"
-                    : "Send a PDF copy to my registered email"}
-                </div>
+                <div className="font-semibold">{t("pdf_email_copy")}</div>
                 <div className="text-xs text-ink2">
-                  {isEs
-                    ? userEmail
-                      ? `Opcional · Se enviará adjunto a ${userEmail}`
-                      : "Opcional · Se enviará adjunto a tu correo de cuenta"
-                    : userEmail
-                      ? `Optional · Will be attached to ${userEmail}`
-                      : "Optional · Will be attached to your account email"}
+                  {userEmail
+                    ? t("pdf_email_sub_known", { email: userEmail })
+                    : t("pdf_email_sub_generic")}
                 </div>
               </div>
             </label>
@@ -642,7 +624,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                 onClick={() => setExportModalOpen(false)}
                 className="btn btn-ghost"
               >
-                {isEs ? "Cancelar" : "Cancel"}
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -650,13 +632,7 @@ export default function DetailDrawer({ id, onClose }: { id: string | null; onClo
                 onClick={handleConfirmDownload}
                 className="btn"
               >
-                {downloading
-                  ? isEs
-                    ? "Generando..."
-                    : "Generating..."
-                  : isEs
-                    ? "Descargar PDF"
-                    : "Download PDF"}
+                {downloading ? t("pdf_generating") : t("pdf_download")}
               </button>
             </div>
           </div>

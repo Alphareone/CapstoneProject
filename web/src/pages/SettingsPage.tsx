@@ -89,8 +89,8 @@ export default function SettingsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line2 py-3">
           <div>
-            <div className="text-[14px]">Text size / Accesibilidad visual</div>
-            <div className="text-xs text-ink2">Adjust interface font scale for easier reading</div>
+            <div className="text-[14px]">{t("set_text_size")}</div>
+            <div className="text-xs text-ink2">{t("set_text_size_sub")}</div>
           </div>
           <div className="flex rounded-lg bg-chip p-1">
             {FONT_SCALES.map((s) => (

@@ -200,7 +200,7 @@ export default function Sidebar({
           onClick={onCloseMobile}
           className="btn mt-5 w-full lg:hidden"
         >
-          ✓ Ver resultados
+          ✓ {t("view_results")}
         </button>
       )}
     </>
