@@ -56,7 +56,7 @@ export default function TopBar({
     (f.min_roi !== null ? 1 : 0);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line2 bg-paper">
+    <header className="sticky top-0 z-[1100] border-b border-line2 bg-paper">
       <div className="flex h-14 items-center gap-2 px-3 sm:gap-[18px] sm:px-5">
         {showFilterToggle && (
           <button
@@ -130,7 +130,7 @@ export default function TopBar({
               {initials}
             </div>
             {menuOpen && (
-              <div className="absolute right-0 top-11 z-40 min-w-[200px] rounded-xl border border-line2 bg-paper p-[6px] shadow-[0_10px_30px_rgba(0,0,0,.15)]">
+              <div className="absolute right-0 top-11 z-[1200] min-w-[200px] rounded-xl border border-line2 bg-paper p-[6px] shadow-[0_10px_30px_rgba(0,0,0,.15)]">
                 <div className="mb-1 border-b border-line2 px-3 py-[10px]">
                   <b className="block">
                     {user?.first_name} {user?.last_name}

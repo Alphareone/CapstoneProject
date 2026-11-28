@@ -11,18 +11,30 @@ const COLOR: Record<string, string> = {
   p: "#777777",
 };
 
-// Centro aproximado de New Jersey.
-const NJ_CENTER: [number, number] = [40.2, -74.5];
+// Centro de Mercer County / Trenton, New Jersey.
+const NJ_CENTER: [number, number] = [40.26, -74.71];
 
 export default function PropertyMap({ onOpen }: { onOpen: (id: string) => void }) {
   const flag = useFilterStore((s) => s.flag);
-  const county = useFilterStore((s) => s.county_id);
-  const { data } = usePropertyMap(flag, county);
+  const county_id = useFilterStore((s) => s.county_id);
+  const auction_type = useFilterStore((s) => s.auction_type);
+  const property_type = useFilterStore((s) => s.property_type);
+  const min_roi = useFilterStore((s) => s.min_roi);
+  const q = useFilterStore((s) => s.q);
+
+  const { data } = usePropertyMap({
+    flag,
+    county_id,
+    auction_type,
+    property_type,
+    min_roi,
+    q,
+  });
   const features = data ?? [];
 
   return (
     <div className="card-surface overflow-hidden" style={{ height: "70vh" }}>
-      <MapContainer center={NJ_CENTER} zoom={8} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={NJ_CENTER} zoom={10} style={{ height: "100%", width: "100%" }}>
         <TileLayer
           attribution='&copy; OpenStreetMap'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -43,7 +55,12 @@ export default function PropertyMap({ onOpen }: { onOpen: (id: string) => void }
               }}
               eventHandlers={{ click: () => onOpen(f.id) }}
             >
-              <Popup>{money(f.opening_price)}</Popup>
+              <Popup>
+                <div className="text-xs">
+                  {f.address && <div className="font-bold">{f.address}</div>}
+                  <div>{money(f.opening_price)}</div>
+                </div>
+              </Popup>
             </CircleMarker>
           );
         })}
