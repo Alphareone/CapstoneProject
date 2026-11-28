@@ -83,35 +83,61 @@ export interface MapFeature {
   lng: number;
 }
 
-export function usePropertyMap(f: Pick<PropertyQuery, "flag" | "county_id" | "auction_type" | "property_type" | "min_roi" | "q">) {
+export function usePropertyMap(
+  f: Pick<PropertyQuery, "flag" | "county_id" | "auction_type" | "property_type" | "min_roi" | "q">
+) {
   return useQuery({
     queryKey: ["map", f.flag, f.county_id, f.auction_type, f.property_type, f.min_roi, f.q],
     queryFn: async (): Promise<MapFeature[]> => {
-      // 1. Traer coordenadas base desde /map
       const mapParams = new URLSearchParams();
       f.flag.forEach((v) => mapParams.append("flag", v));
       if (f.county_id[0]) mapParams.set("county_id", f.county_id[0]);
 
-      // 2. Traer propiedades filtradas con TODOS los filtros activos
+      const { data: mapData } = await api.get(`/api/v1/properties/map?${mapParams.toString()}`);
+      const rawFeatures = mapData.features ?? [];
+
+      const hasExtraFilters =
+        f.auction_type.length > 0 ||
+        f.property_type.length > 0 ||
+        f.min_roi !== null ||
+        Boolean(f.q.trim());
+
+      if (!hasExtraFilters) {
+        return rawFeatures.map((ft: {
+          geometry: { coordinates: [number, number] };
+          properties: {
+            id: string;
+            address?: string;
+            flag: string | null;
+            provisional?: boolean;
+            opening_price: number | null;
+          };
+        }) => ({
+          id: ft.properties.id,
+          address: ft.properties.address,
+          flag: ft.properties.flag,
+          provisional: Boolean(ft.properties.provisional),
+          opening_price: ft.properties.opening_price,
+          lng: ft.geometry.coordinates[0],
+          lat: ft.geometry.coordinates[1],
+        }));
+      }
+
       const listParams = toParams({
         ...f,
         sort: "",
         page: 1,
-        page_size: 200,
+        page_size: 100,
       });
       listParams.delete("county_id");
       if (f.county_id[0]) listParams.set("county_id", f.county_id[0]);
 
-      const [mapRes, listRes] = await Promise.all([
-        api.get(`/api/v1/properties/map?${mapParams.toString()}`),
-        api.get(`/api/v1/properties?${listParams.toString()}`),
-      ]);
-
+      const { data: listData } = await api.get(`/api/v1/properties?${listParams.toString()}`);
       const allowedIds = new Map<string, PropertyListItem>(
-        (listRes.data?.items ?? []).map((item: PropertyListItem) => [item.id, item])
+        (listData?.items ?? []).map((item: PropertyListItem) => [item.id, item])
       );
 
-      return (mapRes.data.features ?? [])
+      return rawFeatures
         .filter((ft: { properties: { id: string } }) => allowedIds.has(ft.properties.id))
         .map((ft: {
           geometry: { coordinates: [number, number] };
